@@ -204,6 +204,50 @@
       font-family: var(--mono); font-size: 9px; color: #f59e0b;
       margin-top: 10px; text-align: center;
     }
+
+    /* ── Date Chip / Calendar ── */
+    #date-chip { cursor: pointer; user-select: none; }
+    #date-chip:hover { border-color: var(--red); color: var(--text); }
+    #calendar-popup {
+      position: fixed; z-index: 5000;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 14px 12px;
+      width: 252px;
+      box-shadow: 0 16px 60px rgba(0,0,0,.85);
+      display: none;
+    }
+    #calendar-popup.open { display: block; }
+    .cal-nav {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+    }
+    .cal-nav-btn {
+      background: none; border: 1px solid var(--border); border-radius: 5px;
+      color: var(--muted); font-size: 15px; width: 26px; height: 26px;
+      cursor: pointer; transition: all .15s;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .cal-nav-btn:hover:not(:disabled) { color: var(--text); border-color: var(--red); }
+    .cal-nav-btn:disabled { opacity: .25; cursor: default; }
+    .cal-month-label { font-size: 13px; font-weight: 700; letter-spacing:.06em; text-transform:uppercase; }
+    .cal-weekdays {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 3px;
+    }
+    .cal-wd { font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: center; padding: 2px 0; }
+    .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .cal-day {
+      font-family: var(--mono); font-size: 11px; text-align: center;
+      padding: 5px 0; border-radius: 4px; line-height: 1;
+    }
+    .cal-day.available { cursor: pointer; color: var(--text); }
+    .cal-day.available:hover { background: var(--panel); }
+    .cal-day.selected { background: var(--red) !important; color: #fff !important; cursor: default; }
+    .cal-day.unavailable { color: #2e3a49; cursor: default; }
+    .cal-day.today { font-weight: 700; }
+    .cal-range-hint {
+      font-family: var(--mono); font-size: 9px; color: var(--muted);
+      text-align: center; margin-top: 10px; padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
   </style>
 </head>
 <body>
@@ -218,7 +262,7 @@
       <button class="fuel-btn active" id="btn-diesel" onclick="setFuel('diesel')">Diesel</button>
       <button class="fuel-btn" id="btn-benzin" onclick="setFuel('benzin')">Benzin 95</button>
     </div>
-    <div id="date-chip">Lade…</div>
+    <div id="date-chip" onclick="toggleCalendar(event)">Lade…</div>
     <div id="status-dot" class="loading"></div>
   </div>
 </header>
@@ -229,6 +273,21 @@
   <div class="ov-sub" id="ov-msg">Lade Kantonsgeometrien…</div>
 </div>
 <div id="toast"></div>
+
+<div id="calendar-popup">
+  <div class="cal-nav">
+    <button class="cal-nav-btn" id="cal-prev" onclick="calNav(-1)">‹</button>
+    <span class="cal-month-label" id="cal-month-label"></span>
+    <button class="cal-nav-btn" id="cal-next" onclick="calNav(1)">›</button>
+  </div>
+  <div class="cal-weekdays">
+    <div class="cal-wd">Mo</div><div class="cal-wd">Di</div><div class="cal-wd">Mi</div>
+    <div class="cal-wd">Do</div><div class="cal-wd">Fr</div><div class="cal-wd">Sa</div>
+    <div class="cal-wd">So</div>
+  </div>
+  <div class="cal-days" id="cal-days"></div>
+  <div class="cal-range-hint">Daten verfügbar: 03.12.2025 – 04.03.2026</div>
+</div>
 
 <div id="chart-modal" onclick="handleModalClick(event)">
   <div class="chart-card">
@@ -316,7 +375,9 @@ const PRICES = {
 };
 
 let fuel = 'diesel';
-function prices() { return PRICES[fuel]; }
+// displayPrices is the working copy, updated when date changes
+let displayPrices = { diesel: {...PRICES.diesel}, benzin: {...PRICES.benzin} };
+function prices() { return displayPrices[fuel]; }
 function otherFuel() { return fuel === 'diesel' ? 'benzin' : 'diesel'; }
 function fuelLabel(f) { return f === 'diesel' ? 'Diesel' : 'Benzin 95'; }
 
@@ -646,12 +707,139 @@ function handleModalClick(e) {
 
 function onEsc(e) { if (e.key === 'Escape') closeChart(); }
 
+/* ── DATE PICKER ──────────────────────────────────────────────── */
+const DATA_START  = new Date(2025, 11, 3);   // Dec 3, 2025
+const DATA_END    = new Date(2026, 2, 4);    // Mar 4, 2026
+const TODAY       = new Date(2026, 2, 4);
+
+let selectedDate  = new Date(DATA_END);
+let calMonth      = DATA_END.getMonth();
+let calYear       = DATA_END.getFullYear();
+let calIsOpen     = false;
+
+const MONTHS_DE = ['Januar','Februar','März','April','Mai','Juni',
+                   'Juli','August','September','Oktober','November','Dezember'];
+
+function toggleCalendar(e) {
+  e.stopPropagation();
+  calIsOpen ? closeCalendar() : openCalendar();
+}
+
+function openCalendar() {
+  calMonth = selectedDate.getMonth();
+  calYear  = selectedDate.getFullYear();
+  renderCalendar();
+  // Position below the date chip
+  const chip = document.getElementById('date-chip');
+  const rect = chip.getBoundingClientRect();
+  const popup = document.getElementById('calendar-popup');
+  popup.style.top   = (rect.bottom + 6) + 'px';
+  popup.style.right = (window.innerWidth - rect.right) + 'px';
+  popup.classList.add('open');
+  calIsOpen = true;
+  setTimeout(() => document.addEventListener('click', calOutsideClick), 0);
+}
+
+function closeCalendar() {
+  document.getElementById('calendar-popup').classList.remove('open');
+  document.removeEventListener('click', calOutsideClick);
+  calIsOpen = false;
+}
+
+function calOutsideClick(e) {
+  const popup = document.getElementById('calendar-popup');
+  if (!popup.contains(e.target)) closeCalendar();
+}
+
+function calNav(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  document.getElementById('cal-month-label').textContent = MONTHS_DE[calMonth] + ' ' + calYear;
+
+  // Disable prev/next if already at boundary month
+  const atStart = calYear < DATA_START.getFullYear() ||
+    (calYear === DATA_START.getFullYear() && calMonth <= DATA_START.getMonth());
+  const atEnd = calYear > DATA_END.getFullYear() ||
+    (calYear === DATA_END.getFullYear() && calMonth >= DATA_END.getMonth());
+  document.getElementById('cal-prev').disabled = atStart;
+  document.getElementById('cal-next').disabled = atEnd;
+
+  const firstDow  = new Date(calYear, calMonth, 1).getDay();  // 0=Sun
+  const offset    = (firstDow + 6) % 7;                        // Mon-first
+  const daysInMo  = new Date(calYear, calMonth + 1, 0).getDate();
+
+  let html = '';
+  for (let i = 0; i < offset; i++) html += '<div></div>';
+
+  for (let d = 1; d <= daysInMo; d++) {
+    const date = new Date(calYear, calMonth, d);
+    const inRange   = date >= DATA_START && date <= DATA_END;
+    const isToday   = date.getTime() === TODAY.getTime();
+    const isSel     = date.getDate()  === selectedDate.getDate() &&
+                      date.getMonth() === selectedDate.getMonth() &&
+                      date.getFullYear() === selectedDate.getFullYear();
+
+    let cls = 'cal-day';
+    if (isSel)      cls += ' selected';
+    else if (inRange) cls += ' available' + (isToday ? ' today' : '');
+    else            cls += ' unavailable';
+
+    const clickAttr = (inRange && !isSel)
+      ? `onclick="onSelectDate(new Date(${calYear},${calMonth},${d}))"` : '';
+    html += `<div class="${cls}" ${clickAttr}>${d}</div>`;
+  }
+  document.getElementById('cal-days').innerHTML = html;
+}
+
+function onSelectDate(date) {
+  selectedDate = date;
+  closeCalendar();
+  setDate();
+  updatePricesForDate(date);
+  renderCalendar(); // refresh to show new selection
+}
+
+/* ── PRICE INTERPOLATION ──────────────────────────────────────── */
+function priceForDate(k, date, fuelType) {
+  const weekMs  = 7 * 24 * 3600 * 1000;
+  const weekPos = Math.max(0, Math.min(13, (date - DATA_START) / weekMs));
+  const i       = Math.min(12, Math.floor(weekPos));
+  const frac    = weekPos - i;
+  const hist    = generateHistory(k);
+  return Math.round((hist[fuelType][i] * (1 - frac) + hist[fuelType][i + 1] * frac) * 1000) / 1000;
+}
+
+function updatePricesForDate(date) {
+  for (const k of Object.keys(PRICES.diesel)) {
+    displayPrices.diesel[k] = priceForDate(k, date, 'diesel');
+    displayPrices.benzin[k] = priceForDate(k, date, 'benzin');
+  }
+  updateLegend();
+  if (geoLayer) {
+    geoLayer.eachLayer(l => {
+      const k = kuerzel(l.feature.properties);
+      const v = prices()[k];
+      l.setStyle({ fillColor: getColor(v), fillOpacity: v ? 0.80 : 0.12 });
+      refreshTooltip(l);
+    });
+  }
+  renderList();
+  if (active) {
+    const k = kuerzel(active.feature.properties);
+    showDetail(k, fullName(active.feature.properties));
+  }
+}
+
 /* ── HELPERS ──────────────────────────────────────────────────── */
 function ovMsg(t) { document.getElementById('ov-msg').textContent = t; }
 function setDate() {
-  const now = new Date();
   document.getElementById('date-chip').textContent =
-    'Stand: ' + now.toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'});
+    'Stand: ' + selectedDate.toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
 function toast(msg, ms=8000) {
   const el = document.getElementById('toast');
