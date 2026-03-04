@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
   <style>
     :root {
       --bg:      #0d1117;
@@ -267,32 +268,65 @@ function getColor(p) {
 
 /* ── PROPERTY HELPERS ─────────────────────────────────────────── */
 function kuerzel(props) {
-  return (props.id || props.kuerzel || props.KUERZEL || props.KT_KUERZEL
-       || props.abbr || props.abbreviation || props.KT || props.ICC || '').toUpperCase();
+  const raw = props.id || props.kuerzel || props.KUERZEL || props.KT_KUERZEL
+           || props.abbr || props.abbreviation || props.KT || props.ICC || '';
+  if (raw) return raw.toUpperCase();
+  // idris-maps fallback: derive from KTNR
+  if (props.KTNR) return KTNR[props.KTNR] || '';
+  return '';
 }
 function fullName(props) {
   const k = kuerzel(props);
-  return NAMES[k] || props.KANTONSNAME || props.NAME || props.name || k;
+  return NAMES[k] || props.KANTONSNAME || props.KTNAME || props.NAME || props.name || k;
 }
 
-/* ── GEO URLS ─────────────────────────────────────────────────── */
-const GEO_URLS = [
-  'https://gist.githubusercontent.com/cmutel/a2e0f2e48278deeedf19846c39cee4da/raw/cantons.geojson',
-  'https://api3.geo.admin.ch/rest/services/ech/MapServer/ch.swisstopo.swissboundaries3d-kanton-flaeche.fill/query?where=1%3D1&outFields=*&returnGeometry=true&f=geojson&sr=4326',
+/* ── KTNR → Kürzel (für idris-maps Fallback) ─────────────────── */
+const KTNR = {
+  1:'ZH',2:'BE',3:'LU',4:'UR',5:'SZ',6:'OW',7:'NW',8:'GL',9:'ZG',10:'FR',
+  11:'SO',12:'BS',13:'BL',14:'SH',15:'AR',16:'AI',17:'SG',18:'GR',
+  19:'AG',20:'TG',21:'TI',22:'VD',23:'VS',24:'NE',25:'GE',26:'JU'
+};
+
+/* ── GEO SOURCES ──────────────────────────────────────────────── */
+// 1. TopoJSON (cmutel gist) – has id:"ZH" on each geometry
+// 2. idris-maps GeoJSON     – has KTNR number, no abbreviation
+const GEO_SOURCES = [
+  {
+    url: 'https://gist.githubusercontent.com/cmutel/a2e0f2e48278deeedf19846c39cee4da/raw/cantons.geojson',
+    parse(j) {
+      // This is actually TopoJSON – convert with topojson-client
+      if (j.type === 'Topology' && j.objects && j.objects.cantons) {
+        const geo = topojson.feature(j, j.objects.cantons);
+        // id is on the geometry object, not in properties – promote it
+        geo.features.forEach(f => { if (!f.properties) f.properties = {}; f.properties.id = f.id; });
+        return geo;
+      }
+      return j; // already GeoJSON
+    }
+  },
+  {
+    url: 'https://raw.githubusercontent.com/idris-maps/swiss-geodata-2018/master/data/cantons.json',
+    parse(j) {
+      // Add kuerzel from KTNR
+      j.features.forEach(f => { f.properties.kuerzel = KTNR[f.properties.KTNR] || ''; });
+      return j;
+    }
+  },
 ];
 
 async function fetchGeo() {
   const errs = [];
-  for (const url of GEO_URLS) {
+  for (const src of GEO_SOURCES) {
     try {
-      ovMsg('Lade Grenzen…');
-      const res = await fetch(url);
-      if (!res.ok) { errs.push(url + ' → ' + res.status); continue; }
-      const j = await res.json();
-      const feats = j.features || [];
-      if (feats.length < 5 || !feats[0].geometry) { errs.push(url + ' → ungültiges GeoJSON'); continue; }
-      return j;
-    } catch(e) { errs.push(url + ' → ' + e.message); }
+      ovMsg('Lade Kantonsgeometrien…');
+      const res = await fetch(src.url);
+      if (!res.ok) { errs.push(src.url + ' → HTTP ' + res.status); continue; }
+      const raw = await res.json();
+      const geo = src.parse(raw);
+      const feats = geo.features || [];
+      if (feats.length < 5 || !feats[0].geometry) { errs.push(src.url + ' → kein gültiges GeoJSON'); continue; }
+      return geo;
+    } catch(e) { errs.push(src.url + ' → ' + e.message); }
   }
   throw new Error('Kantonsgrenzen nicht ladbar:\n' + errs.join('\n'));
 }
