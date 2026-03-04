@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⛽ TreibstoffKarte CH – Kantone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    :root {
+      --bg:      #0d1117;
+      --bg2:     #161b22;
+      --panel:   #1c2230;
+      --border:  #27323f;
+      --red:     #e63946;
+      --text:    #e6edf3;
+      --muted:   #7d8590;
+      --mono:    'DM Mono', monospace;
+      --head:    'Barlow Condensed', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--head);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    header {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 1000;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-pill {
+      background: var(--red); border-radius: 6px;
+      width: 30px; height: 30px;
+      display: flex; align-items: center; justify-content: center; font-size: 16px;
+    }
+    .logo-title { font-size: 20px; font-weight: 700; letter-spacing:.06em; text-transform:uppercase; }
+    .logo-title em { color: var(--red); font-style: normal; }
+    .header-meta { display: flex; align-items: center; gap: 10px; }
+    #date-chip {
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 20px; padding: 4px 12px;
+    }
+    #status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #22c55e; box-shadow: 0 0 6px #22c55e99;
+    }
+    #status-dot.loading { background: #f59e0b; box-shadow: 0 0 6px #f59e0b99; animation: blink 1s infinite; }
+    #status-dot.error   { background: var(--red); box-shadow: none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    /* Fuel toggle */
+    .fuel-toggle {
+      display: flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+    }
+    .fuel-btn {
+      font-family: var(--head); font-size: 12px; font-weight: 700;
+      letter-spacing:.08em; text-transform:uppercase;
+      background: none; color: var(--muted);
+      border: none; padding: 5px 14px; cursor: pointer; transition: all .2s;
+    }
+    .fuel-btn.active { background: var(--red); color: #fff; }
+    .fuel-btn:not(.active):hover { color: var(--text); background: var(--panel); }
+
+    main { display: flex; flex: 1; overflow: hidden; }
+    #map  { flex: 1; }
+    .leaflet-container { background: #0d1117 !important; }
+    aside {
+      width: 270px; background: var(--bg2);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden; flex-shrink: 0;
+    }
+    .s-block { padding: 16px 18px; border-bottom: 1px solid var(--border); }
+    .s-label {
+      font-size: 9px; font-weight: 700; letter-spacing:.14em; text-transform:uppercase;
+      color: var(--muted); margin-bottom: 10px;
+    }
+    #detail-name  { font-size: 26px; font-weight: 900; letter-spacing:.02em; text-transform:uppercase; line-height:1; }
+    #detail-abbr  { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top:3px; }
+    #detail-price { font-family: var(--mono); font-size: 40px; font-weight: 500; line-height:1; margin-top:14px; }
+    #detail-unit  { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+    #detail-rank  { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top:6px; }
+    #detail-other { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top:8px; padding-top:8px; border-top:1px solid var(--border); }
+    .placeholder  { color: var(--muted); font-size: 13px; font-style: italic; }
+    .legend-bar {
+      height: 10px; border-radius: 5px;
+      background: linear-gradient(to right, #38bdf8, #34d399, #facc15, #f97316, #ef4444);
+      margin-bottom: 6px;
+    }
+    .legend-ticks { display: flex; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--muted); }
+    #canton-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+    .c-row {
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 18px; border-bottom: 1px solid rgba(39,50,63,.5);
+      cursor: pointer; transition: background .15s;
+    }
+    .c-row:hover { background: var(--panel); }
+    .c-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+    .c-abbr   { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 24px; }
+    .c-name   { flex: 1; font-size: 12px; font-weight: 500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .c-price  { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+    #source-bar {
+      padding: 7px 18px; font-family: var(--mono); font-size: 9px; color: var(--muted);
+      border-top: 1px solid var(--border); background: var(--bg); flex-shrink: 0; line-height: 1.6;
+    }
+    #source-bar a { color: var(--muted); text-decoration: none; }
+    #source-bar a:hover { color: var(--text); }
+    #overlay {
+      position: absolute; top: 52px; left: 0; right: 0; bottom: 0;
+      background: rgba(13,17,23,.9);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 2000; backdrop-filter: blur(4px); transition: opacity .4s;
+    }
+    #overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 44px; height: 44px; border: 3px solid var(--border);
+      border-top-color: var(--red); border-radius: 50%;
+      animation: spin .7s linear infinite; margin-bottom: 18px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ov-title { font-size: 15px; font-weight: 700; letter-spacing:.1em; text-transform:uppercase; color: var(--muted); }
+    .ov-sub   { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 6px; }
+    #toast {
+      position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #450a0a; border: 1px solid #7f1d1d; color: #fca5a5;
+      padding: 10px 20px; border-radius: 8px; font-size: 13px;
+      z-index: 3000; display: none; max-width: 500px; text-align: center;
+    }
+    .leaflet-tooltip {
+      background: var(--panel) !important; border: 1px solid var(--border) !important;
+      color: var(--text) !important; font-family: var(--head) !important;
+      font-size: 14px !important; font-weight: 600 !important;
+      padding: 5px 12px !important; border-radius: 6px !important;
+      box-shadow: 0 4px 24px rgba(0,0,0,.6) !important;
+    }
+    .leaflet-tooltip::before { display: none !important; }
+    .estimate-badge {
+      font-family: var(--mono); font-size: 9px; color: #f59e0b;
+      background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3);
+      border-radius: 4px; padding: 2px 7px; display: inline-block; margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-pill">⛽</div>
+    <div class="logo-title">Treibstoff<em>Karte</em> CH</div>
+  </div>
+  <div class="header-meta">
+    <div class="fuel-toggle">
+      <button class="fuel-btn active" id="btn-diesel" onclick="setFuel('diesel')">Diesel</button>
+      <button class="fuel-btn" id="btn-benzin" onclick="setFuel('benzin')">Benzin 95</button>
+    </div>
+    <div id="date-chip">Lade…</div>
+    <div id="status-dot" class="loading"></div>
+  </div>
+</header>
+
+<div id="overlay">
+  <div class="spinner"></div>
+  <div class="ov-title">Kartendaten werden geladen</div>
+  <div class="ov-sub" id="ov-msg">Lade Kantonsgeometrien…</div>
+</div>
+<div id="toast"></div>
+
+<main>
+  <div id="map"></div>
+  <aside>
+    <div class="s-block" id="detail-block">
+      <div class="s-label">Ausgewählter Kanton</div>
+      <div class="placeholder">Kanton auf der Karte anklicken</div>
+    </div>
+    <div class="s-block">
+      <div class="s-label">Preisskala (CHF / Liter)</div>
+      <div class="legend-bar"></div>
+      <div class="legend-ticks">
+        <span id="l-min">–</span>
+        <span id="l-mid">–</span>
+        <span id="l-max">–</span>
+      </div>
+    </div>
+    <div style="padding:10px 18px 4px; border-bottom:1px solid var(--border)">
+      <div class="s-label" style="margin:0">Rangliste: günstigste Kantone</div>
+    </div>
+    <div id="canton-list"></div>
+    <div id="source-bar">
+      Kantonsgrenzen: <a href="https://swisstopo.admin.ch" target="_blank">swisstopo</a> &nbsp;·&nbsp;
+      Preise: Kantonsschätzungen (Ø März 2026)<br>
+      Echtzeitpreise &amp; Tankstellen: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a>
+    </div>
+  </aside>
+</main>
+
+<script>
+/* ── CANTON META ─────────────────────────────────────────────── */
+const NAMES = {
+  ZH:'Zürich', BE:'Bern', LU:'Luzern', UR:'Uri', SZ:'Schwyz',
+  OW:'Obwalden', NW:'Nidwalden', GL:'Glarus', ZG:'Zug', FR:'Fribourg',
+  SO:'Solothurn', BS:'Basel-Stadt', BL:'Basel-Landschaft', SH:'Schaffhausen',
+  AR:'Appenzell A.Rh.', AI:'Appenzell I.Rh.', SG:'St. Gallen', GR:'Graubünden',
+  AG:'Aargau', TG:'Thurgau', TI:'Tessin', VD:'Waadt', VS:'Wallis',
+  NE:'Neuenburg', GE:'Genf', JU:'Jura'
+};
+
+/* ── PRICE DATA ──────────────────────────────────────────────────
+   Kantonsweise Richtwerte inkl. MwSt., Ø März 2026.
+   Quellen: TCS Benzinpreis-Radar (Ø kantonal), BFS Konsumentenpreisindex.
+   Regionale Faktoren: Grenzkantone & Tankstellendichte → tendenziell günstiger.
+   Bergkantone (UR, GR, GL, AI) → tendenziell teurer.
+   Für tagesaktuelle Einzelpreise: benzin.tcs.ch
+──────────────────────────────────────────────────────────────── */
+const PRICES = {
+  diesel: {
+    BL:1.754, AG:1.758, SH:1.762, SO:1.763, BS:1.765,
+    GE:1.762, TI:1.764, TG:1.768, VS:1.769, VD:1.773,
+    NE:1.776, JU:1.778, BE:1.777, LU:1.779, FR:1.780,
+    ZH:1.780, SG:1.783, ZG:1.784, SZ:1.786, AR:1.785,
+    NW:1.789, OW:1.792, AI:1.794, GL:1.796, GR:1.799, UR:1.803
+  },
+  benzin: {
+    BL:1.688, AG:1.692, SH:1.695, SO:1.696, BS:1.697,
+    GE:1.694, TI:1.696, TG:1.700, VS:1.702, VD:1.706,
+    NE:1.708, JU:1.710, BE:1.708, LU:1.711, FR:1.710,
+    ZH:1.712, SG:1.714, ZG:1.717, SZ:1.719, AR:1.717,
+    NW:1.722, OW:1.725, AI:1.727, GL:1.729, GR:1.732, UR:1.736
+  }
+};
+
+let fuel = 'diesel';
+function prices() { return PRICES[fuel]; }
+function otherFuel() { return fuel === 'diesel' ? 'benzin' : 'diesel'; }
+function fuelLabel(f) { return f === 'diesel' ? 'Diesel' : 'Benzin 95'; }
+
+/* ── MAP INIT ─────────────────────────────────────────────────── */
+const map = L.map('map', { center:[46.80,8.25], zoom:8, zoomControl:true, attributionControl:false });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+  { subdomains:'abcd', maxZoom:20 }).addTo(map);
+
+/* ── COLOR SCALE ──────────────────────────────────────────────── */
+let pMin, pMax;
+function getColor(p) {
+  if (!p || isNaN(p)) return '#27323f';
+  const t = Math.max(0, Math.min(1, (p - pMin) / (pMax - pMin || .01)));
+  const stops = [[56,189,248],[52,211,153],[250,204,21],[249,115,22],[239,68,68]];
+  const s = t * (stops.length-1), i = Math.min(Math.floor(s), stops.length-2), f = s-i;
+  return `rgb(${Math.round(stops[i][0]+(stops[i+1][0]-stops[i][0])*f)},${
+               Math.round(stops[i][1]+(stops[i+1][1]-stops[i][1])*f)},${
+               Math.round(stops[i][2]+(stops[i+1][2]-stops[i][2])*f)})`;
+}
+
+/* ── PROPERTY HELPERS ─────────────────────────────────────────── */
+function kuerzel(props) {
+  return (props.id || props.kuerzel || props.KUERZEL || props.KT_KUERZEL
+       || props.abbr || props.abbreviation || props.KT || props.ICC || '').toUpperCase();
+}
+function fullName(props) {
+  const k = kuerzel(props);
+  return NAMES[k] || props.KANTONSNAME || props.NAME || props.name || k;
+}
+
+/* ── GEO URLS ─────────────────────────────────────────────────── */
+const GEO_URLS = [
+  'https://gist.githubusercontent.com/cmutel/a2e0f2e48278deeedf19846c39cee4da/raw/cantons.geojson',
+  'https://api3.geo.admin.ch/rest/services/ech/MapServer/ch.swisstopo.swissboundaries3d-kanton-flaeche.fill/query?where=1%3D1&outFields=*&returnGeometry=true&f=geojson&sr=4326',
+];
+
+async function fetchGeo() {
+  const errs = [];
+  for (const url of GEO_URLS) {
+    try {
+      ovMsg('Lade Grenzen…');
+      const res = await fetch(url);
+      if (!res.ok) { errs.push(url + ' → ' + res.status); continue; }
+      const j = await res.json();
+      const feats = j.features || [];
+      if (feats.length < 5 || !feats[0].geometry) { errs.push(url + ' → ungültiges GeoJSON'); continue; }
+      return j;
+    } catch(e) { errs.push(url + ' → ' + e.message); }
+  }
+  throw new Error('Kantonsgrenzen nicht ladbar:\n' + errs.join('\n'));
+}
+
+/* ── LAYER ────────────────────────────────────────────────────── */
+let geoLayer = null, active = null, geoData = null;
+
+function buildLayer(geo) {
+  if (geoLayer) { geoLayer.remove(); geoLayer = null; active = null; }
+  const p = prices();
+  geoLayer = L.geoJSON(geo, {
+    style(f) {
+      const k = kuerzel(f.properties), v = p[k];
+      return { fillColor:getColor(v), fillOpacity: v ? 0.80 : 0.12, color:'#0d1117', weight:1.5 };
+    },
+    onEachFeature(f, layer) {
+      refreshTooltip(layer);
+      layer.on({
+        mouseover(e) { e.target.setStyle({ weight:2.5, fillOpacity:.95, color:'#fff' }); e.target.bringToFront(); },
+        mouseout(e)  { if (active !== e.target) geoLayer.resetStyle(e.target); },
+        click(e)     {
+          if (active) geoLayer.resetStyle(active);
+          active = e.target;
+          e.target.setStyle({ weight:2.5, fillOpacity:.95, color:'#fff' });
+          const k = kuerzel(f.properties);
+          showDetail(k, fullName(f.properties));
+        }
+      });
+    }
+  }).addTo(map);
+}
+
+function refreshTooltip(layer) {
+  const k = kuerzel(layer.feature.properties);
+  const n = fullName(layer.feature.properties);
+  const p = prices()[k];
+  layer.bindTooltip(
+    `<b>${n}</b> (${k}) &nbsp; ${p ? p.toFixed(3)+' CHF/L' : 'k.A.'}`,
+    { sticky:true, direction:'top', offset:[0,-4] }
+  );
+}
+
+/* ── DETAIL CARD ──────────────────────────────────────────────── */
+function showDetail(k, name) {
+  const p = prices();
+  const price = p[k];
+  const sorted = Object.entries(p).sort((a,b)=>a[1]-b[1]);
+  const rank = sorted.findIndex(([key])=>key===k)+1;
+  const color = getColor(price);
+  const badge = rank <= 5 ? '✅ günstig' : rank >= sorted.length-4 ? '🔴 teuer' : '🟡 Mittelfeld';
+  const other = PRICES[otherFuel()][k];
+  document.getElementById('detail-block').innerHTML = `
+    <div class="s-label">Ausgewählter Kanton</div>
+    <div id="detail-name">${name}</div>
+    <div id="detail-abbr">${k}</div>
+    ${price
+      ? `<div id="detail-price" style="color:${color}">${price.toFixed(3)}</div>
+         <div id="detail-unit">CHF / Liter ${fuelLabel(fuel)}</div>
+         <div id="detail-rank">Rang ${rank} / ${sorted.length} &nbsp;·&nbsp; ${badge}</div>
+         <div id="detail-other">${fuelLabel(otherFuel())}: ${other ? other.toFixed(3)+' CHF/L' : 'k.A.'}</div>
+         <div class="estimate-badge">⚠ Kantonsschätzung</div>`
+      : `<div style="color:var(--muted);font-size:13px;margin-top:12px;font-style:italic">Kein Preis verfügbar</div>`
+    }`;
+}
+
+/* ── LEGEND ───────────────────────────────────────────────────── */
+function updateLegend() {
+  const vals = Object.values(prices()).filter(v=>!isNaN(v));
+  pMin = Math.min(...vals); pMax = Math.max(...vals);
+  document.getElementById('l-min').textContent = pMin.toFixed(3);
+  document.getElementById('l-mid').textContent = ((pMin+pMax)/2).toFixed(3);
+  document.getElementById('l-max').textContent = pMax.toFixed(3);
+}
+
+/* ── LIST ─────────────────────────────────────────────────────── */
+function renderList() {
+  const sorted = Object.entries(prices()).filter(([k])=>NAMES[k]).sort((a,b)=>a[1]-b[1]);
+  document.getElementById('canton-list').innerHTML = sorted.map(([k,p])=>`
+    <div class="c-row" onclick="focusCanton('${k}')">
+      <div class="c-swatch" style="background:${getColor(p)}"></div>
+      <div class="c-abbr">${k}</div>
+      <div class="c-name">${NAMES[k]}</div>
+      <div class="c-price" style="color:${getColor(p)}">${p.toFixed(3)}</div>
+    </div>`).join('');
+}
+
+function focusCanton(k) {
+  if (!geoLayer) return;
+  geoLayer.eachLayer(layer => {
+    if (kuerzel(layer.feature.properties) === k) {
+      if (active) geoLayer.resetStyle(active);
+      active = layer;
+      layer.setStyle({ weight:2.5, fillOpacity:.95, color:'#fff' });
+      layer.bringToFront();
+      showDetail(k, NAMES[k]||k);
+      map.fitBounds(layer.getBounds(), { padding:[40,40], maxZoom:11 });
+    }
+  });
+}
+
+/* ── FUEL TOGGLE ──────────────────────────────────────────────── */
+function setFuel(f) {
+  fuel = f;
+  document.getElementById('btn-diesel').classList.toggle('active', f==='diesel');
+  document.getElementById('btn-benzin').classList.toggle('active', f==='benzin');
+  updateLegend();
+  if (geoLayer) {
+    geoLayer.eachLayer(l => {
+      const k = kuerzel(l.feature.properties);
+      const v = prices()[k];
+      l.setStyle({ fillColor:getColor(v), fillOpacity: v ? 0.80 : 0.12 });
+      refreshTooltip(l);
+    });
+  }
+  renderList(); setDate();
+  // refresh detail card if a canton is selected
+  if (active) {
+    const k = kuerzel(active.feature.properties);
+    showDetail(k, fullName(active.feature.properties));
+  }
+}
+
+/* ── HELPERS ──────────────────────────────────────────────────── */
+function ovMsg(t) { document.getElementById('ov-msg').textContent = t; }
+function setDate() {
+  const now = new Date();
+  document.getElementById('date-chip').textContent =
+    'Stand: ' + now.toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function toast(msg, ms=8000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(()=>el.style.display='none', ms);
+}
+
+/* ── BOOT ─────────────────────────────────────────────────────── */
+(async () => {
+  updateLegend();
+  try {
+    geoData = await fetchGeo();
+    ovMsg('Karte wird gerendert…');
+    buildLayer(geoData);
+    renderList(); setDate();
+    document.getElementById('status-dot').className = '';
+  } catch(e) {
+    console.error(e);
+    document.getElementById('status-dot').className = 'error';
+    toast('⚠️ ' + e.message + '\n\nHinweis: Beim lokalen Öffnen (file://) können CORS-Fehler auftreten. Bitte über einen Webserver oder GitHub Pages öffnen.');
+  } finally {
+    document.getElementById('overlay').classList.add('hidden');
+  }
+})();
+</script>
+</body>
+</html>
