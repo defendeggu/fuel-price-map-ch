@@ -22,10 +22,11 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 - Karte, Farben und Rangliste aktualisieren sich sofort
 
 ### Preisverlauf-Chart
-- Im Detailbereich: «Preisverlauf 3 Monate →» anklicken
+- Im Detailbereich: «Preisverlauf →» anklicken
 - Modal mit Linienchart: Diesel (orange) und Benzin 95 (blau)
-- 13 Wochen Wochendurchschnitte
-- Aktueller Preis: echte TCS-Stationsdaten · Verlauf: geschätzt auf Basis nationaler Trendkurve
+- Zeitraum wählbar: **1M / 2M / 3M / 6M / 12M**
+- Echte TCS-Tagesdaten (durchgezogene Linie) vs. geschätzte Werte (gestrichelte Linie) klar deklariert
+- Disclaimer zeigt grün «Echte TCS-Daten» oder amber «Teils geschätzt» je nach Datenlage
 - Interaktiver Tooltip beim Hovern
 - Schliessen: ✕, Klick ausserhalb oder ESC
 
@@ -51,13 +52,15 @@ Täglich um **01:00 Uhr CET** läuft ein GitHub Actions Workflow:
 3. Alle ~3900 Stationen werden aus der Firestore-Datenbank geladen
 4. PLZ aus Stationsadresse → Kanton (Swiss PLZ-Mapping)
 5. Kantonspreise = Ø aller Stationspreise pro Kanton
-6. Ergebnis wird als `data/canton-prices.json` committed und gepusht
-7. Die Webseite lädt beim Start automatisch die aktuellsten Daten
+6. Ergebnis wird als `data/canton-prices.json` committed
+7. Eintrag für den heutigen Tag wird in `data/price-history.json` geschrieben (max. 400 Tage, für Charts)
+8. Commit & Push; die Webseite lädt beim Start automatisch die aktuellsten Daten
 
 ```
 .github/workflows/scrape.yml   ← Cron-Job (täglich 01:00 CET)
 scripts/scrape.py              ← Playwright-Login + Firestore-Abfrage
 data/canton-prices.json        ← Aktuelle Preise (täglich generiert)
+data/price-history.json        ← Verlaufsdaten pro Kanton (täglich akkumuliert)
 ```
 
 **Fallback**: Falls der TCS-Login nicht verfügbar ist, wird automatisch auf den nationalen Durchschnitt von [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/Switzerland/) + BFS-Kantonsoffsets zurückgegriffen.
@@ -73,7 +76,11 @@ data/canton-prices.json        ← Aktuelle Preise (täglich generiert)
 | [CartoDB Dark Matter](https://carto.com/basemaps/) | Hintergrundkarte |
 
 ### Preisverlauf (Chart)
-Der historische Wochenverlauf (3 Monate) basiert auf einer geschätzten nationalen Trendkurve mit kantonstypischer Abweichung. Nur der aktuellste Datenpunkt stammt aus echten TCS-Stationsdaten. Mit wachsendem Datenverlauf (tägliche Commits seit März 2026) wird dieser Anteil grösser.
+Seit März 2026 werden täglich echte TCS-Kantonspreise in `data/price-history.json` akkumuliert. Der Chart zeigt:
+- **Echte Daten** (durchgezogene Linie): Tage mit einem TCS-Scraper-Eintrag
+- **Geschätzte Daten** (gestrichelte Linie): Lücken werden mit einer nationalen Trendkurve + kantonstypischem Offset interpoliert
+
+Je mehr Tage gesammelt sind, desto mehr der Kurve basiert auf Echtwerten. Bei ausreichend Daten im gewählten Zeitraum wechselt der Disclaimer auf grün.
 
 ### Bibliotheken
 - [Leaflet](https://leafletjs.com/) – interaktive Karte
