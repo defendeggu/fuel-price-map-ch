@@ -1,6 +1,6 @@
 # TreibstoffKarte CH ⛽
 
-Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel und Benzin 95 – inkl. historischer Preisentwicklung und Zeitreise-Funktion.
+Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel und Benzin 95 – inkl. historischer Preisentwicklung, Zeitreise-Funktion und wöchentlich aktualisierten Livedaten.
 
 🔗 **Live:** https://defendeggu.github.io/fuel-price-map-ch/
 
@@ -34,6 +34,30 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 - Datenbereich: 03.12.2025 – 04.03.2026
 - Datum auswählen → Karte, Rangliste und Detailansicht zeigen interpolierte Preise für diesen Tag
 
+### Responsives Design
+- Vollständig bedienbar auf Handy und Tablet
+- Auf Mobile: Sidebar als Slide-up Bottom Sheet (Griff antippen zum Öffnen/Schliessen)
+- Kanton antippen → Sidebar öffnet sich automatisch mit Detailansicht
+- Chart-Modal als Bottom Sheet auf Mobile
+- Datepicker zentriert auf kleinen Bildschirmen
+
+---
+
+## Daten-Pipeline (Live-Preise)
+
+Jeden **Montag um 07:00 Uhr** (CH-Zeit) läuft ein GitHub Actions Workflow:
+
+1. Python-Scraper (`scripts/scrape.py`) holt den **nationalen Durchschnittspreis** von [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/Switzerland/) via Playwright (Headless-Browser)
+2. Kantonspreise werden berechnet: `nationaler Ø + BFS-Kantonsoffset`
+3. Ergebnis wird als `data/canton-prices.json` committed und gepusht
+4. Die Webseite lädt beim Start automatisch die aktuellsten Daten
+
+```
+.github/workflows/scrape.yml   ← Cron-Job (jeden Montag)
+scripts/scrape.py              ← Playwright-Scraper + Kantonsoffsets
+data/canton-prices.json        ← Aktuellste Preise (von Workflow generiert)
+```
+
 ---
 
 ## Datenquellen & Methodik
@@ -55,6 +79,12 @@ Der historische Wochenverlauf basiert auf einem nationalen Trendmodell (leicht s
 > Für tagesaktuelle Einzelpreise pro Tankstelle: **[benzin.tcs.ch](https://benzin.tcs.ch)**
 
 Referenzquellen: [TCS Benzinpreis-Radar](https://benzin.tcs.ch) · [BFS Konsumentenpreisindex](https://www.bfs.admin.ch)
+
+### Kantonsoffsets
+
+Die Abweichungen vom nationalen Durchschnitt (in CHF/L) basieren auf regionalwirtschaftlichen Faktoren:
+- **Grenzkantone** (GE, TI, BL, BS): höhere Tankstellendichte → tendenziell günstiger
+- **Bergkantone** (UR, GR, GL, AI): Logistikkosten → tendenziell teurer
 
 ### Kartendaten
 - Kantonsgrenzen: [swissBOUNDARIES3D](https://swisstopo.admin.ch) (TopoJSON via cmutel/gist, Fallback: idris-maps)

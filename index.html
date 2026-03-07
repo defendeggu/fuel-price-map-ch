@@ -248,6 +248,70 @@
       text-align: center; margin-top: 10px; padding-top: 8px;
       border-top: 1px solid var(--border);
     }
+
+    /* ── Aside pull handle (mobile only) ── */
+    .aside-handle {
+      display: none;
+      justify-content: center; align-items: center;
+      height: 40px; cursor: pointer; flex-shrink: 0;
+      touch-action: none;
+    }
+    .aside-handle-bar {
+      width: 36px; height: 4px; border-radius: 2px;
+      background: var(--border);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 767px) {
+      header { padding: 0 12px; gap: 6px; }
+      .logo-title { font-size: 16px; }
+      .fuel-btn   { padding: 5px 10px; font-size: 11px; }
+      #date-chip  { font-size: 10px; padding: 4px 8px; }
+
+      main { flex-direction: column; }
+      #map { flex: 1; min-height: 0; }
+
+      .aside-handle { display: flex; }
+
+      aside {
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        width: 100% !important;
+        height: 70vh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        border-radius: 16px 16px 0 0;
+        transform: translateY(calc(100% - 40px));
+        transition: transform .3s cubic-bezier(.4,0,.2,1);
+        z-index: 900;
+        box-shadow: 0 -8px 40px rgba(0,0,0,.6);
+      }
+      aside.sheet-open { transform: translateY(0); }
+
+      /* chart modal as bottom sheet on mobile */
+      #chart-modal { align-items: flex-end; }
+      .chart-card {
+        width: 100%;
+        border-radius: 16px 16px 0 0;
+        max-height: 85vh;
+        overflow-y: auto;
+        transform: translateY(40px);
+      }
+      #chart-modal.open .chart-card { transform: translateY(0); }
+
+      /* calendar centered on mobile */
+      #calendar-popup {
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%);
+        width: calc(100vw - 32px);
+        max-width: 280px;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .logo-title { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -313,7 +377,8 @@
 
 <main>
   <div id="map"></div>
-  <aside>
+  <aside id="aside">
+    <div class="aside-handle" onclick="toggleAside()"><div class="aside-handle-bar"></div></div>
     <div class="s-block" id="detail-block">
       <div class="s-label">Ausgewählter Kanton</div>
       <div class="placeholder">Kanton auf der Karte anklicken</div>
@@ -523,6 +588,7 @@ function showDetail(k, name) {
          <button class="chart-btn" onclick="openChart('${k}','${name.replace(/'/g,"\\'")}')">Preisverlauf 3 Monate →</button>`
       : `<div style="color:var(--muted);font-size:13px;margin-top:12px;font-style:italic">Kein Preis verfügbar</div>`
     }`;
+  openAside();
 }
 
 /* ── LEGEND ───────────────────────────────────────────────────── */
@@ -733,8 +799,10 @@ function openCalendar() {
   const chip = document.getElementById('date-chip');
   const rect = chip.getBoundingClientRect();
   const popup = document.getElementById('calendar-popup');
-  popup.style.top   = (rect.bottom + 6) + 'px';
-  popup.style.right = (window.innerWidth - rect.right) + 'px';
+  popup.style.top = (rect.bottom + 6) + 'px';
+  if (!isMobile()) {
+    popup.style.right = (window.innerWidth - rect.right) + 'px';
+  }
   popup.classList.add('open');
   calIsOpen = true;
   setTimeout(() => document.addEventListener('click', calOutsideClick), 0);
@@ -833,6 +901,15 @@ function updatePricesForDate(date) {
     const k = kuerzel(active.feature.properties);
     showDetail(k, fullName(active.feature.properties));
   }
+}
+
+/* ── MOBILE ASIDE ─────────────────────────────────────────────── */
+function isMobile() { return window.innerWidth < 768; }
+function toggleAside() {
+  document.getElementById('aside').classList.toggle('sheet-open');
+}
+function openAside() {
+  if (isMobile()) document.getElementById('aside').classList.add('sheet-open');
 }
 
 /* ── HELPERS ──────────────────────────────────────────────────── */
