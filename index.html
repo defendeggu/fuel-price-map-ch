@@ -350,7 +350,7 @@
     <div class="cal-wd">So</div>
   </div>
   <div class="cal-days" id="cal-days"></div>
-  <div class="cal-range-hint">Daten verfügbar: 03.12.2025 – 04.03.2026</div>
+  <div class="cal-range-hint" id="cal-range-hint">Daten verfügbar: 03.12.2025 – heute</div>
 </div>
 
 <div id="chart-modal" onclick="handleModalClick(event)">
@@ -673,9 +673,8 @@ function generateHistory(k) {
 }
 
 function historyLabels() {
-  const today = new Date(2026, 2, 4); // Mar 4 2026
   return Array.from({length: 14}, (_, i) => {
-    const d = new Date(today);
+    const d = new Date(TODAY);
     d.setDate(d.getDate() - (13 - i) * 7);
     return d.toLocaleDateString('de-CH', { day:'2-digit', month:'2-digit' });
   });
@@ -775,12 +774,12 @@ function onEsc(e) { if (e.key === 'Escape') closeChart(); }
 
 /* ── DATE PICKER ──────────────────────────────────────────────── */
 const DATA_START  = new Date(2025, 11, 3);   // Dec 3, 2025
-const DATA_END    = new Date(2026, 2, 4);    // Mar 4, 2026
-const TODAY       = new Date(2026, 2, 4);
+const TODAY       = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+let   DATA_END    = new Date(TODAY);
 
-let selectedDate  = new Date(DATA_END);
-let calMonth      = DATA_END.getMonth();
-let calYear       = DATA_END.getFullYear();
+let selectedDate  = new Date(TODAY);
+let calMonth      = TODAY.getMonth();
+let calYear       = TODAY.getFullYear();
 let calIsOpen     = false;
 
 const MONTHS_DE = ['Januar','Februar','März','April','Mai','Juni',
