@@ -1,6 +1,6 @@
 # TreibstoffKarte CH ⛽
 
-Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel und Benzin 95 – inkl. historischer Preisentwicklung, Zeitreise-Funktion und wöchentlich aktualisierten Livedaten.
+Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel und Benzin 95 – basierend auf echten Stationspreisen von benzin.tcs.ch, mit historischer Preisentwicklung, Zeitreise-Funktion und täglichen Updates.
 
 🔗 **Live:** https://defendeggu.github.io/fuel-price-map-ch/
 
@@ -24,14 +24,14 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 ### Preisverlauf-Chart
 - Im Detailbereich: «Preisverlauf 3 Monate →» anklicken
 - Modal mit Linienchart: Diesel (orange) und Benzin 95 (blau)
-- 13 Wochen Wochendurchschnitte (Dez 2025 – März 2026)
+- 13 Wochen Wochendurchschnitte
+- Aktueller Preis: echte TCS-Stationsdaten · Verlauf: geschätzt auf Basis nationaler Trendkurve
 - Interaktiver Tooltip beim Hovern
 - Schliessen: ✕, Klick ausserhalb oder ESC
 
 ### Zeitreise-Datepicker
 - Datumsfeld oben rechts («Stand: …») anklicken
-- Kalender mit verfügbaren Tagen (weiss) und Tagen ohne Daten (grau)
-- Datenbereich: 03.12.2025 – 04.03.2026
+- Kalender mit verfügbaren Tagen
 - Datum auswählen → Karte, Rangliste und Detailansicht zeigen interpolierte Preise für diesen Tag
 
 ### Responsives Design
@@ -39,77 +39,68 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 - Auf Mobile: Sidebar als Slide-up Bottom Sheet (Griff antippen zum Öffnen/Schliessen)
 - Kanton antippen → Sidebar öffnet sich automatisch mit Detailansicht
 - Chart-Modal als Bottom Sheet auf Mobile
-- Datepicker zentriert auf kleinen Bildschirmen
 
 ---
 
 ## Daten-Pipeline (Live-Preise)
 
-Jeden **Montag um 07:00 Uhr** (CH-Zeit) läuft ein GitHub Actions Workflow:
+Täglich um **01:00 Uhr CET** läuft ein GitHub Actions Workflow:
 
-1. Python-Scraper (`scripts/scrape.py`) holt den **nationalen Durchschnittspreis** von [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/Switzerland/) via Playwright (Headless-Browser)
-2. Kantonspreise werden berechnet: `nationaler Ø + BFS-Kantonsoffset`
-3. Ergebnis wird als `data/canton-prices.json` committed und gepusht
-4. Die Webseite lädt beim Start automatisch die aktuellsten Daten
+1. Python-Scraper (`scripts/scrape.py`) loggt sich auf [benzin.tcs.ch](https://benzin.tcs.ch) ein (Azure B2C → Firebase)
+2. Firebase ID-Token wird aus dem Netzwerk-Traffic abgegriffen
+3. Alle ~3900 Stationen werden aus der Firestore-Datenbank geladen
+4. PLZ aus Stationsadresse → Kanton (Swiss PLZ-Mapping)
+5. Kantonspreise = Ø aller Stationspreise pro Kanton
+6. Ergebnis wird als `data/canton-prices.json` committed und gepusht
+7. Die Webseite lädt beim Start automatisch die aktuellsten Daten
 
 ```
-.github/workflows/scrape.yml   ← Cron-Job (jeden Montag)
-scripts/scrape.py              ← Playwright-Scraper + Kantonsoffsets
-data/canton-prices.json        ← Aktuellste Preise (von Workflow generiert)
+.github/workflows/scrape.yml   ← Cron-Job (täglich 01:00 CET)
+scripts/scrape.py              ← Playwright-Login + Firestore-Abfrage
+data/canton-prices.json        ← Aktuelle Preise (täglich generiert)
 ```
+
+**Fallback**: Falls der TCS-Login nicht verfügbar ist, wird automatisch auf den nationalen Durchschnitt von [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/Switzerland/) + BFS-Kantonsoffsets zurückgegriffen.
 
 ---
 
-## Datenquellen & Methodik
+## Datenquellen
 
-### Preisdaten
-
-Da keine kostenlose öffentliche API für kantonsweise Treibstoffpreise in der Schweiz existiert, werden **regionale Richtwerte** auf Basis bekannter Muster verwendet:
-
-| | Wert |
+| Quelle | Verwendung |
 |---|---|
-| Nationaler Ø Diesel (März 2026) | ~1.78 CHF/L |
-| Nationaler Ø Benzin 95 (März 2026) | ~1.71 CHF/L |
-| Günstigste Kantone | BL, AG, SH, BS (Grenzkantone, hohe Tankstellendichte) |
-| Teuerste Kantone | UR, GR, GL, AI (Bergregionen, höhere Logistikkosten) |
+| [benzin.tcs.ch](https://benzin.tcs.ch) | Stationspreise (~3900 Stationen, Ø pro Kanton) |
+| [swisstopo](https://swisstopo.admin.ch) | Kantonsgrenzen (TopoJSON) |
+| [CartoDB Dark Matter](https://carto.com/basemaps/) | Hintergrundkarte |
 
-Der historische Wochenverlauf basiert auf einem nationalen Trendmodell (leicht sinkende Preise Dez 2025 → März 2026) mit kantonsüblicher Abweichung und deterministischem Rauschen pro Kanton.
-
-> ⚠️ **Hinweis**: Alle Preise sind Schätzungen, keine garantierten Echtzeitpreise.
-> Für tagesaktuelle Einzelpreise pro Tankstelle: **[benzin.tcs.ch](https://benzin.tcs.ch)**
-
-Referenzquellen: [TCS Benzinpreis-Radar](https://benzin.tcs.ch) · [BFS Konsumentenpreisindex](https://www.bfs.admin.ch)
-
-### Kantonsoffsets
-
-Die Abweichungen vom nationalen Durchschnitt (in CHF/L) basieren auf regionalwirtschaftlichen Faktoren:
-- **Grenzkantone** (GE, TI, BL, BS): höhere Tankstellendichte → tendenziell günstiger
-- **Bergkantone** (UR, GR, GL, AI): Logistikkosten → tendenziell teurer
-
-### Kartendaten
-- Kantonsgrenzen: [swissBOUNDARIES3D](https://swisstopo.admin.ch) (TopoJSON via cmutel/gist, Fallback: idris-maps)
-- Hintergrundkarte: [CartoDB Dark Matter](https://carto.com/basemaps/)
+### Preisverlauf (Chart)
+Der historische Wochenverlauf (3 Monate) basiert auf einer geschätzten nationalen Trendkurve mit kantonstypischer Abweichung. Nur der aktuellste Datenpunkt stammt aus echten TCS-Stationsdaten. Mit wachsendem Datenverlauf (tägliche Commits seit März 2026) wird dieser Anteil grösser.
 
 ### Bibliotheken
 - [Leaflet](https://leafletjs.com/) – interaktive Karte
-- [topojson-client](https://github.com/topojson/topojson-client) – TopoJSON → GeoJSON Konvertierung
+- [topojson-client](https://github.com/topojson/topojson-client) – TopoJSON → GeoJSON
 - [Chart.js](https://www.chartjs.org/) – Preisverlauf-Chart
 
 ---
 
 ## Lokale Entwicklung
 
-Einzel-Datei-App, kein Build-Step nötig. Wegen CORS muss ein lokaler Webserver verwendet werden (direktes Öffnen als `file://` schlägt fehl):
+Einzel-Datei-App, kein Build-Step nötig. Wegen CORS muss ein lokaler Webserver verwendet werden:
 
 ```bash
-# Python
 python -m http.server 8080
-
-# Node.js
+# oder
 npx serve .
 ```
 
 → http://localhost:8080
+
+### Scraper lokal ausführen
+
+```bash
+pip install playwright aiohttp
+playwright install chromium
+TCS_EMAIL=xxx TCS_PASSWORD=yyy python scripts/scrape.py
+```
 
 ---
 
@@ -118,3 +109,7 @@ npx serve .
 Settings → Pages → Source: `main` / Root `/`
 
 → https://defendeggu.github.io/fuel-price-map-ch/
+
+**GitHub Secrets** (für den Scraper-Workflow):
+- `TCS_EMAIL` – E-Mail-Adresse des TCS-Accounts
+- `TCS_PASSWORD` – Passwort des TCS-Accounts

@@ -371,7 +371,7 @@
       </div>
     </div>
     <canvas id="price-chart" height="200"></canvas>
-    <div class="chart-estimate">⚠ Kantonsschätzungen – für Echtzeitpreise: benzin.tcs.ch</div>
+    <div class="chart-estimate" id="chart-estimate">⚠ Verlauf geschätzt · Aktuelle Preise: benzin.tcs.ch</div>
   </div>
 </div>
 
@@ -398,8 +398,8 @@
     <div id="canton-list"></div>
     <div id="source-bar">
       Kantonsgrenzen: <a href="https://swisstopo.admin.ch" target="_blank">swisstopo</a> &nbsp;·&nbsp;
-      Preise: Kantonsschätzungen (Ø März 2026)<br>
-      Echtzeitpreise &amp; Tankstellen: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a>
+      Preise: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a><br>
+      Einzelpreise &amp; Tankstellen: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a>
     </div>
   </aside>
 </main>
@@ -945,13 +945,20 @@ async function loadLivePrices() {
 
     const dateStr = new Date(data.updated).toLocaleDateString('de-CH',
       { day:'2-digit', month:'2-digit', year:'numeric' });
+    const isTCS = (data.source || '').toLowerCase().includes('tcs');
+    const priceSource = isTCS
+      ? `Preise: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a> (Stationsdurchschnitt pro Kanton) &nbsp;·&nbsp; Stand ${dateStr}`
+      : `Preise: <a href="https://www.globalpetrolprices.com/Switzerland/" target="_blank">GlobalPetrolPrices.com</a> + BFS Kantonsoffsets &nbsp;·&nbsp; Stand ${dateStr}`;
     document.getElementById('source-bar').innerHTML =
-      `Preise: <a href="https://www.globalpetrolprices.com/Switzerland/" target="_blank">GlobalPetrolPrices.com</a>`
-      + ` + BFS Kantonsoffsets &nbsp;·&nbsp; Stand ${dateStr}<br>`
+      `Kantonsgrenzen: <a href="https://swisstopo.admin.ch" target="_blank">swisstopo</a> &nbsp;·&nbsp; ${priceSource}<br>`
       + `Einzelpreise & Tankstellen: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a>`;
 
     const hint = document.querySelector('.cal-range-hint');
-    if (hint) hint.textContent = `Schätzungen ab 03.12.2025 · Echtdaten ab ${dateStr}`;
+    if (hint) hint.textContent = `Echtdaten ab ${dateStr} · ältere Werte geschätzt`;
+    const est = document.getElementById('chart-estimate');
+    if (est) est.textContent = isTCS
+      ? `⚠ Verlauf geschätzt · Aktueller Preis: benzin.tcs.ch (${dateStr})`
+      : `⚠ Verlauf & Preise geschätzt · Einzelpreise: benzin.tcs.ch`;
 
     console.log('Live-Preise geladen:', data.updated,
       '| Diesel:', data.national?.diesel, '| Benzin:', data.national?.benzin);
