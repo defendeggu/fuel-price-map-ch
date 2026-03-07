@@ -204,6 +204,17 @@
       font-family: var(--mono); font-size: 9px; color: #f59e0b;
       margin-top: 10px; text-align: center;
     }
+    .chart-ranges {
+      display: flex; gap: 4px; margin: 10px 0 6px;
+    }
+    .range-btn {
+      font-family: var(--mono); font-size: 10px; font-weight: 500;
+      background: none; color: var(--muted);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 3px 9px; cursor: pointer; transition: all .15s;
+    }
+    .range-btn.active { background: var(--panel); color: var(--text); border-color: var(--red); }
+    .range-btn:hover:not(.active) { color: var(--text); }
 
     /* ── Date Chip / Calendar ── */
     #date-chip { cursor: pointer; user-select: none; }
@@ -358,9 +369,16 @@
     <div class="chart-header">
       <div>
         <div class="chart-title" id="chart-canton-name">–</div>
-        <div class="chart-sub">Preisentwicklung · letzte 3 Monate · Wochendurchschnitt CHF/L</div>
+        <div class="chart-sub" id="chart-sub">Preisentwicklung · CHF/L</div>
       </div>
       <button class="chart-close" onclick="closeChart()">✕</button>
+    </div>
+    <div class="chart-ranges">
+      <button class="range-btn" data-m="1"  onclick="setChartRange(1)">1M</button>
+      <button class="range-btn" data-m="2"  onclick="setChartRange(2)">2M</button>
+      <button class="range-btn active" data-m="3"  onclick="setChartRange(3)">3M</button>
+      <button class="range-btn" data-m="6"  onclick="setChartRange(6)">6M</button>
+      <button class="range-btn" data-m="12" onclick="setChartRange(12)">12M</button>
     </div>
     <div class="chart-legend">
       <div class="chart-legend-item">
@@ -368,6 +386,9 @@
       </div>
       <div class="chart-legend-item">
         <div class="chart-legend-dot" style="background:#38bdf8"></div> Benzin 95
+      </div>
+      <div class="chart-legend-item" id="legend-estimated" style="display:none">
+        <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#7d8590" stroke-width="1.5" stroke-dasharray="4,3"/></svg> Geschätzt
       </div>
     </div>
     <canvas id="price-chart" height="200"></canvas>
@@ -648,45 +669,155 @@ function setFuel(f) {
   }
 }
 
-/* ── PRICE HISTORY ────────────────────────────────────────────── */
-// National weekly trend: 13 weeks back (Dec 3, 2025) → today (Mar 4, 2026)
+/* ── PRICE HISTORY (Schätz-Baseline) ─────────────────────────── */
+// 14 wöchentliche Datenpunkte: Dez 2025 → heute als Schätz-Trend
 const NAT_TREND = {
   diesel: [1.820,1.818,1.815,1.808,1.805,1.804,1.801,1.799,1.797,1.794,1.791,1.788,1.784,1.780],
   benzin: [1.748,1.745,1.743,1.737,1.734,1.732,1.729,1.726,1.724,1.721,1.718,1.715,1.712,1.711],
 };
-const NAT_TODAY = { diesel: 1.780, benzin: 1.711 };
+const TREND_START = new Date(2025, 11, 3); // Dec 3, 2025
+const NAT_TODAY   = { diesel: 1.780, benzin: 1.711 };
 
-// Deterministic noise: small weekly variation per canton
-function seededNoise(k, week, fuelType) {
-  const a = (k.charCodeAt(0) || 0) * 1000 + (k.charCodeAt(1) || 0) * 37 + week * 17 + (fuelType === 'diesel' ? 0 : 500);
-  return (((a * 1664525 + 1013904223) & 0x7fffffff) / 0x7fffffff) * 0.006 - 0.003;
+// Deterministisches Rauschen pro Kanton/Woche
+function seededNoise(k, seed, fuelType) {
+  const a = (k.charCodeAt(0)||0)*1000 + (k.charCodeAt(1)||0)*37 + seed*17 + (fuelType==='diesel'?0:500);
+  return (((a*1664525+1013904223)&0x7fffffff)/0x7fffffff)*0.006-0.003;
 }
 
-function generateHistory(k) {
-  return ['diesel', 'benzin'].reduce((acc, f) => {
-    const offset = (PRICES[f][k] || NAT_TODAY[f]) - NAT_TODAY[f];
-    acc[f] = NAT_TREND[f].map((v, i) =>
-      Math.round((v + offset + seededNoise(k, i, f)) * 1000) / 1000
-    );
-    return acc;
-  }, {});
+// Geschätzter Preis für beliebiges Datum via Interpolation im NAT_TREND
+function estimatedPrice(canton, date, fuelType) {
+  const weekMs  = 7*24*3600*1000;
+  const weekPos = Math.max(0, Math.min(13, (date - TREND_START) / weekMs));
+  const i       = Math.min(12, Math.floor(weekPos));
+  const frac    = weekPos - i;
+  const offset  = (PRICES[fuelType][canton] || NAT_TODAY[fuelType]) - NAT_TODAY[fuelType];
+  const v0 = NAT_TREND[fuelType][i]   + offset + seededNoise(canton, i,   fuelType);
+  const v1 = NAT_TREND[fuelType][i+1] + offset + seededNoise(canton, i+1, fuelType);
+  return Math.round((v0*(1-frac) + v1*frac)*1000)/1000;
 }
 
-function historyLabels() {
-  return Array.from({length: 14}, (_, i) => {
-    const d = new Date(TODAY);
-    d.setDate(d.getDate() - (13 - i) * 7);
-    return d.toLocaleDateString('de-CH', { day:'2-digit', month:'2-digit' });
-  });
+/* ── LIVE PRICE HISTORY ───────────────────────────────────────── */
+let priceHistory = null; // geladen aus data/price-history.json
+
+async function loadPriceHistory() {
+  try {
+    const res = await fetch('./data/price-history.json');
+    if (!res.ok) return;
+    priceHistory = await res.json();
+    console.log('price-history.json geladen:', priceHistory.entries?.length, 'Einträge');
+  } catch(e) {
+    console.warn('price-history.json nicht verfügbar:', e.message);
+  }
+}
+
+// Sucht den nächsten echten Eintrag zu einem Datum (max. maxDaysDist Tage Abstand)
+function closestRealEntry(date, maxDaysDist=4) {
+  if (!priceHistory?.entries?.length) return null;
+  const targetMs = date.getTime();
+  let best = null, bestDist = Infinity;
+  for (const e of priceHistory.entries) {
+    const dist = Math.abs(new Date(e.date).getTime() - targetMs);
+    if (dist < bestDist) { bestDist = dist; best = e; }
+  }
+  return bestDist <= maxDaysDist*86400000 ? best : null;
+}
+
+// Gibt Array von {date, label, diesel, benzin, isReal} für den gewählten Zeitraum zurück
+function getHistoryPoints(canton, rangeMonths) {
+  const endDate   = new Date(TODAY);
+  const startDate = new Date(TODAY);
+  startDate.setMonth(startDate.getMonth() - rangeMonths);
+
+  // Auflösung: ~13–15 Datenpunkte pro Zeitraum
+  const totalDays = rangeMonths * 30;
+  const step      = totalDays <= 30 ? 2 : totalDays <= 60 ? 4 : totalDays <= 90 ? 7 : totalDays <= 180 ? 14 : 28;
+
+  const points = [];
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + step)) {
+    const snap  = new Date(d);
+    const entry = closestRealEntry(snap, Math.floor(step/2));
+    const label = snap.toLocaleDateString('de-CH', {day:'2-digit', month:'2-digit',
+                    year: rangeMonths > 6 ? '2-digit' : undefined});
+    if (entry?.cantons?.[canton]) {
+      points.push({ date: snap, label, diesel: entry.cantons[canton].diesel,
+                    benzin: entry.cantons[canton].benzin, isReal: true });
+    } else {
+      points.push({ date: snap, label,
+                    diesel: estimatedPrice(canton, snap, 'diesel'),
+                    benzin: estimatedPrice(canton, snap, 'benzin'), isReal: false });
+    }
+  }
+  // Letzten Punkt immer auf heute / aktuellsten echten Eintrag setzen
+  if (points.length) {
+    const lastEntry = closestRealEntry(TODAY, 3);
+    if (lastEntry?.cantons?.[canton]) {
+      const last = points[points.length-1];
+      last.diesel = lastEntry.cantons[canton].diesel;
+      last.benzin = lastEntry.cantons[canton].benzin;
+      last.isReal = true;
+    }
+  }
+  return points;
 }
 
 /* ── CHART MODAL ──────────────────────────────────────────────── */
-let chartInstance = null;
+let chartInstance      = null;
+let chartCanton        = null;
+let chartCantonName    = '';
+let chartRangeMonths   = 3;
 
-function openChart(k, name) {
-  document.getElementById('chart-canton-name').textContent = name + ' (' + k + ')';
-  const labels = historyLabels();
-  const hist = generateHistory(k);
+function buildDataset(points, fuelType, color, bgColor) {
+  const data   = points.map(p => p[fuelType]);
+  const isReal = points.map(p => p.isReal);
+  const n      = points.length;
+  return {
+    label: fuelType === 'diesel' ? 'Diesel' : 'Benzin 95',
+    data,
+    borderColor: color,
+    backgroundColor: bgColor,
+    borderWidth: 2,
+    tension: 0.35,
+    fill: true,
+    pointRadius: points.map((_, i) => i === n-1 ? 6 : 3),
+    pointBackgroundColor: points.map((p, i) => i === n-1 ? color : 'transparent'),
+    pointBorderColor: color,
+    // Gestrichelt wo geschätzt
+    segment: {
+      borderDash: ctx => (!isReal[ctx.p0DataIndex] || !isReal[ctx.p1DataIndex]) ? [5,4] : [],
+      borderColor: ctx => (!isReal[ctx.p0DataIndex] || !isReal[ctx.p1DataIndex])
+        ? color.replace(')', ',0.45)').replace('rgb','rgba') : color,
+    },
+  };
+}
+
+function renderChart(canton, rangeMonths) {
+  const points = getHistoryPoints(canton, rangeMonths);
+  const hasAnyReal      = points.some(p => p.isReal);
+  const hasAnyEstimated = points.some(p => !p.isReal);
+  const allReal         = hasAnyReal && !hasAnyEstimated;
+
+  // Subtitle
+  const stepLabel = rangeMonths <= 1 ? '2-Tages-Ø' : rangeMonths <= 2 ? '4-Tages-Ø'
+    : rangeMonths <= 3 ? 'Wochenø' : rangeMonths <= 6 ? '2-Wochen-Ø' : 'Monatsø';
+  document.getElementById('chart-sub').textContent =
+    `Preisverlauf · ${rangeMonths} Monat${rangeMonths>1?'e':''} · ${stepLabel} · CHF/L`;
+
+  // Disclaimer
+  const est = document.getElementById('chart-estimate');
+  if (allReal) {
+    est.textContent = '✓ Echte TCS-Stationsdaten (benzin.tcs.ch)';
+    est.style.color = '#22c55e';
+  } else if (!hasAnyReal) {
+    est.textContent = '⚠ Verlauf geschätzt (noch keine historischen TCS-Daten für diesen Zeitraum)';
+    est.style.color = '#f59e0b';
+  } else {
+    const realCount = points.filter(p=>p.isReal).length;
+    est.textContent = `⚠ Teils geschätzt – ${realCount}/${points.length} Datenpunkte: benzin.tcs.ch`;
+    est.style.color = '#f59e0b';
+  }
+
+  // Legende "Geschätzt" ein-/ausblenden
+  document.getElementById('legend-estimated').style.display = hasAnyEstimated ? '' : 'none';
 
   if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
 
@@ -694,32 +825,10 @@ function openChart(k, name) {
   chartInstance = new Chart(ctx, {
     type: 'line',
     data: {
-      labels,
+      labels: points.map(p => p.label),
       datasets: [
-        {
-          label: 'Diesel',
-          data: hist.diesel,
-          borderColor: '#f97316',
-          backgroundColor: 'rgba(249,115,22,.08)',
-          borderWidth: 2,
-          pointRadius: hist.diesel.map((_, i) => i === 13 ? 6 : 3),
-          pointBackgroundColor: hist.diesel.map((_, i) => i === 13 ? '#f97316' : 'transparent'),
-          pointBorderColor: '#f97316',
-          tension: 0.35,
-          fill: true,
-        },
-        {
-          label: 'Benzin 95',
-          data: hist.benzin,
-          borderColor: '#38bdf8',
-          backgroundColor: 'rgba(56,189,248,.06)',
-          borderWidth: 2,
-          pointRadius: hist.benzin.map((_, i) => i === 13 ? 6 : 3),
-          pointBackgroundColor: hist.benzin.map((_, i) => i === 13 ? '#38bdf8' : 'transparent'),
-          pointBorderColor: '#38bdf8',
-          tension: 0.35,
-          fill: true,
-        },
+        buildDataset(points, 'diesel', '#f97316', 'rgba(249,115,22,.08)'),
+        buildDataset(points, 'benzin', '#38bdf8', 'rgba(56,189,248,.06)'),
       ],
     },
     options: {
@@ -728,36 +837,44 @@ function openChart(k, name) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1c2230',
-          borderColor: '#27323f',
-          borderWidth: 1,
-          titleColor: '#e6edf3',
-          bodyColor: '#7d8590',
+          backgroundColor: '#1c2230', borderColor: '#27323f', borderWidth: 1,
+          titleColor: '#e6edf3', bodyColor: '#7d8590',
           titleFont: { family: "'DM Mono', monospace", size: 11 },
           bodyFont:  { family: "'DM Mono', monospace", size: 11 },
           callbacks: {
             label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)} CHF/L`,
+            afterBody: (items) => {
+              const idx = items[0]?.dataIndex;
+              return (idx != null && !points[idx].isReal) ? ['  ↳ geschätzt'] : [];
+            },
           },
         },
       },
       scales: {
-        x: {
-          grid: { color: '#27323f' },
-          ticks: { color: '#7d8590', font: { family: "'DM Mono', monospace", size: 10 }, maxRotation: 0 },
-        },
-        y: {
-          grid: { color: '#27323f' },
-          ticks: {
-            color: '#7d8590', font: { family: "'DM Mono', monospace", size: 10 },
-            callback: v => v.toFixed(3),
-          },
-        },
+        x: { grid: { color: '#27323f' },
+             ticks: { color: '#7d8590', font: { family: "'DM Mono', monospace", size: 10 }, maxRotation: 0 } },
+        y: { grid: { color: '#27323f' },
+             ticks: { color: '#7d8590', font: { family: "'DM Mono', monospace", size: 10 },
+                      callback: v => v.toFixed(3) } },
       },
     },
   });
+}
 
+function openChart(k, name) {
+  chartCanton     = k;
+  chartCantonName = name;
+  document.getElementById('chart-canton-name').textContent = name + ' (' + k + ')';
+  renderChart(k, chartRangeMonths);
   document.getElementById('chart-modal').classList.add('open');
   document.addEventListener('keydown', onEsc);
+}
+
+function setChartRange(months) {
+  chartRangeMonths = months;
+  document.querySelectorAll('.range-btn').forEach(b =>
+    b.classList.toggle('active', +b.dataset.m === months));
+  if (chartCanton) renderChart(chartCanton, months);
 }
 
 function closeChart() {
@@ -873,12 +990,7 @@ function onSelectDate(date) {
 
 /* ── PRICE INTERPOLATION ──────────────────────────────────────── */
 function priceForDate(k, date, fuelType) {
-  const weekMs  = 7 * 24 * 3600 * 1000;
-  const weekPos = Math.max(0, Math.min(13, (date - DATA_START) / weekMs));
-  const i       = Math.min(12, Math.floor(weekPos));
-  const frac    = weekPos - i;
-  const hist    = generateHistory(k);
-  return Math.round((hist[fuelType][i] * (1 - frac) + hist[fuelType][i + 1] * frac) * 1000) / 1000;
+  return estimatedPrice(k, date, fuelType);
 }
 
 function updatePricesForDate(date) {
@@ -971,7 +1083,7 @@ async function loadLivePrices() {
 (async () => {
   updateLegend();
   try {
-    const [geo] = await Promise.all([fetchGeo(), loadLivePrices()]);
+    const [geo] = await Promise.all([fetchGeo(), loadLivePrices(), loadPriceHistory()]);
     geoData = geo;
     ovMsg('Karte wird gerendert…');
     updateLegend();

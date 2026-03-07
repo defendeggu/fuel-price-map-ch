@@ -332,10 +332,41 @@ async def main():
         "cantons": cantons,
     }
 
-    out_path = Path(__file__).parent.parent / "data" / "canton-prices.json"
-    out_path.parent.mkdir(exist_ok=True)
+    data_dir = Path(__file__).parent.parent / "data"
+    data_dir.mkdir(exist_ok=True)
+
+    # canton-prices.json (aktueller Stand)
+    out_path = data_dir / "canton-prices.json"
     out_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
     print(f"Gespeichert: {out_path} ({len(cantons)} Kantone) | {source_label}")
+
+    # price-history.json (akkumulierter Verlauf)
+    today_str    = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    hist_path    = data_dir / "price-history.json"
+    source_short = "tcs" if "tcs" in source_label.lower() else "estimated"
+
+    history = {"entries": []}
+    if hist_path.exists():
+        try:
+            history = json.loads(hist_path.read_text())
+        except Exception:
+            pass
+
+    # Heutigen Eintrag ersetzen oder anhängen
+    entries   = history.setdefault("entries", [])
+    today_idx = next((i for i, e in enumerate(entries) if e.get("date") == today_str), None)
+    new_entry = {"date": today_str, "source": source_short, "cantons": cantons}
+    if today_idx is not None:
+        entries[today_idx] = new_entry
+    else:
+        entries.append(new_entry)
+
+    # Chronologisch sortieren, max. 400 Einträge (> 1 Jahr) behalten
+    entries.sort(key=lambda e: e["date"])
+    history["entries"] = entries[-400:]
+
+    hist_path.write_text(json.dumps(history, separators=(",", ":"), ensure_ascii=False))
+    print(f"Verlauf: {hist_path} ({len(history['entries'])} Einträge)")
 
 
 if __name__ == "__main__":
