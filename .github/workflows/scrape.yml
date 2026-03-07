@@ -24,10 +24,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright
+          pip install playwright aiohttp
           playwright install chromium --with-deps
 
       - name: Scrape Preise
+        env:
+          TCS_EMAIL: ${{ secrets.TCS_EMAIL }}
+          TCS_PASSWORD: ${{ secrets.TCS_PASSWORD }}
         run: python scripts/scrape.py
 
       - name: Commit & Push (falls geändert)
