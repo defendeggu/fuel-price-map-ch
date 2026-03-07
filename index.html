@@ -606,7 +606,7 @@ function showDetail(k, name) {
          <div id="detail-rank">Rang ${rank} / ${sorted.length} &nbsp;·&nbsp; ${badge}</div>
          <div id="detail-other">${fuelLabel(otherFuel())}: ${other ? other.toFixed(3)+' CHF/L' : 'k.A.'}</div>
          <div class="estimate-badge">⚠ Kantonsschätzung</div>
-         <button class="chart-btn" onclick="openChart('${k}','${name.replace(/'/g,"\\'")}')">Preisverlauf 3 Monate →</button>`
+         <button class="chart-btn" onclick="openChart('${k}','${name.replace(/'/g,"\\'")}')">Preisverlauf →</button>`
       : `<div style="color:var(--muted);font-size:13px;margin-top:12px;font-style:italic">Kein Preis verfügbar</div>`
     }`;
   openAside();
