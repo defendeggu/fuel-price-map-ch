@@ -1,0 +1,36 @@
+{
+  "updated": "2026-03-07T06:00:00Z",
+  "national": {
+    "diesel": 1.780,
+    "benzin": 1.711
+  },
+  "source": "GlobalPetrolPrices.com (nationaler Durchschnitt) + BFS-basierte Kantonsoffsets",
+  "cantons": {
+    "ZH": { "diesel": 1.780, "benzin": 1.712 },
+    "BE": { "diesel": 1.777, "benzin": 1.708 },
+    "LU": { "diesel": 1.779, "benzin": 1.711 },
+    "UR": { "diesel": 1.803, "benzin": 1.736 },
+    "SZ": { "diesel": 1.786, "benzin": 1.719 },
+    "OW": { "diesel": 1.792, "benzin": 1.725 },
+    "NW": { "diesel": 1.789, "benzin": 1.722 },
+    "GL": { "diesel": 1.796, "benzin": 1.729 },
+    "ZG": { "diesel": 1.784, "benzin": 1.717 },
+    "FR": { "diesel": 1.780, "benzin": 1.710 },
+    "SO": { "diesel": 1.763, "benzin": 1.696 },
+    "BS": { "diesel": 1.765, "benzin": 1.697 },
+    "BL": { "diesel": 1.754, "benzin": 1.688 },
+    "SH": { "diesel": 1.762, "benzin": 1.695 },
+    "AR": { "diesel": 1.785, "benzin": 1.717 },
+    "AI": { "diesel": 1.794, "benzin": 1.727 },
+    "SG": { "diesel": 1.783, "benzin": 1.714 },
+    "GR": { "diesel": 1.799, "benzin": 1.732 },
+    "AG": { "diesel": 1.758, "benzin": 1.692 },
+    "TG": { "diesel": 1.768, "benzin": 1.700 },
+    "TI": { "diesel": 1.764, "benzin": 1.696 },
+    "VD": { "diesel": 1.773, "benzin": 1.706 },
+    "VS": { "diesel": 1.769, "benzin": 1.702 },
+    "NE": { "diesel": 1.776, "benzin": 1.708 },
+    "GE": { "diesel": 1.762, "benzin": 1.694 },
+    "JU": { "diesel": 1.778, "benzin": 1.710 }
+  }
+}

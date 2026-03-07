@@ -847,12 +847,51 @@ function toast(msg, ms=8000) {
   setTimeout(()=>el.style.display='none', ms);
 }
 
+/* ── LIVE PREISE LADEN ────────────────────────────────────────── */
+async function loadLivePrices() {
+  try {
+    const res = await fetch('./data/canton-prices.json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    for (const k of Object.keys(PRICES.diesel)) {
+      if (data.cantons[k]) {
+        PRICES.diesel[k]        = data.cantons[k].diesel;
+        PRICES.benzin[k]        = data.cantons[k].benzin;
+        displayPrices.diesel[k] = data.cantons[k].diesel;
+        displayPrices.benzin[k] = data.cantons[k].benzin;
+      }
+    }
+    if (data.national) {
+      NAT_TODAY.diesel = data.national.diesel;
+      NAT_TODAY.benzin = data.national.benzin;
+    }
+
+    const dateStr = new Date(data.updated).toLocaleDateString('de-CH',
+      { day:'2-digit', month:'2-digit', year:'numeric' });
+    document.getElementById('source-bar').innerHTML =
+      `Preise: <a href="https://www.globalpetrolprices.com/Switzerland/" target="_blank">GlobalPetrolPrices.com</a>`
+      + ` + BFS Kantonsoffsets &nbsp;·&nbsp; Stand ${dateStr}<br>`
+      + `Einzelpreise & Tankstellen: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a>`;
+
+    const hint = document.querySelector('.cal-range-hint');
+    if (hint) hint.textContent = `Schätzungen ab 03.12.2025 · Echtdaten ab ${dateStr}`;
+
+    console.log('Live-Preise geladen:', data.updated,
+      '| Diesel:', data.national?.diesel, '| Benzin:', data.national?.benzin);
+  } catch(e) {
+    console.warn('canton-prices.json nicht ladbar, nutze Schätzwerte:', e.message);
+  }
+}
+
 /* ── BOOT ─────────────────────────────────────────────────────── */
 (async () => {
   updateLegend();
   try {
-    geoData = await fetchGeo();
+    const [geo] = await Promise.all([fetchGeo(), loadLivePrices()]);
+    geoData = geo;
     ovMsg('Karte wird gerendert…');
+    updateLegend();
     buildLayer(geoData);
     renderList(); setDate();
     document.getElementById('status-dot').className = '';
