@@ -1,8 +1,8 @@
 {
-  "updated": "2026-03-07T21:53:28Z",
+  "updated": "2026-03-08T01:19:06Z",
   "national": {
     "diesel": 1.815,
-    "benzin": 1.676
+    "benzin": 1.677
   },
   "source": "benzin.tcs.ch (Stationsdurchschnitt pro Kanton)",
   "cantons": {
@@ -19,8 +19,8 @@
       "benzin": 1.641
     },
     "SO": {
-      "diesel": 1.757,
-      "benzin": 1.599
+      "diesel": 1.758,
+      "benzin": 1.6
     },
     "BS": {
       "diesel": 1.901,
@@ -35,19 +35,19 @@
       "benzin": 1.769
     },
     "TG": {
-      "diesel": 1.815,
+      "diesel": 1.814,
       "benzin": 1.654
     },
     "VS": {
-      "diesel": 1.856,
+      "diesel": 1.855,
       "benzin": 1.698
     },
     "VD": {
       "diesel": 1.89,
-      "benzin": 1.749
+      "benzin": 1.75
     },
     "NE": {
-      "diesel": 1.794,
+      "diesel": 1.796,
       "benzin": 1.654
     },
     "JU": {
@@ -59,7 +59,7 @@
       "benzin": 1.636
     },
     "LU": {
-      "diesel": 1.799,
+      "diesel": 1.798,
       "benzin": 1.67
     },
     "FR": {
@@ -68,7 +68,7 @@
     },
     "ZH": {
       "diesel": 1.863,
-      "benzin": 1.725
+      "benzin": 1.726
     },
     "SG": {
       "diesel": 1.807,
@@ -80,7 +80,7 @@
     },
     "SZ": {
       "diesel": 1.829,
-      "benzin": 1.662
+      "benzin": 1.665
     },
     "AR": {
       "diesel": 1.733,
