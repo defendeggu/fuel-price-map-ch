@@ -554,10 +554,9 @@ let geoLayer = null, active = null, geoData = null;
 
 function buildLayer(geo) {
   if (geoLayer) { geoLayer.remove(); geoLayer = null; active = null; }
-  const p = prices();
   geoLayer = L.geoJSON(geo, {
     style(f) {
-      const k = kuerzel(f.properties), v = p[k];
+      const k = kuerzel(f.properties), v = prices()[k];
       return { fillColor:getColor(v), fillOpacity: v ? 0.80 : 0.12, color:'#0d1117', weight:1.5 };
     },
     onEachFeature(f, layer) {
