@@ -75,6 +75,10 @@ OFFSETS = {
 FALLBACK = {"diesel": 1.780, "benzin": 1.711}
 ALL_CANTONS = list(OFFSETS["diesel"].keys())
 
+# ── Marokko ───────────────────────────────────────────────────────────────────
+USD_TO_CHF = 0.90          # Wechselkurs USD → CHF (näherungsweise, kann aktualisiert werden)
+MOROCCO_FALLBACK = {"diesel": 1.04, "benzin": 1.20}  # CHF/L Schätzwerte
+
 
 # ── Strategie 1: TCS benzin.tcs.ch ───────────────────────────────────────────
 
@@ -286,6 +290,58 @@ async def strategy_fallback() -> tuple[dict, str]:
     return prices, "GlobalPetrolPrices.com (nationaler Ø) + BFS Kantonsoffsets"
 
 
+# ── Marokko: GlobalPetrolPrices ───────────────────────────────────────────────
+
+async def scrape_morocco() -> dict:
+    """
+    Scrapt Marokko-Nationalpreise von GlobalPetrolPrices.com.
+    Gibt {"diesel": CHF, "benzin": CHF} zurück (Fallback wenn kein Preis gefunden).
+    GPP zeigt auf der Länderseite eine Weltrangliste mit USD/L-Preisen;
+    Marokko Diesel: ~1.0–1.3 USD/L → * USD_TO_CHF → CHF/L.
+    """
+    from playwright.async_api import async_playwright
+    print("Marokko: Scrape GlobalPetrolPrices.com …")
+    results = {}
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(args=["--no-sandbox"])
+        page = await browser.new_page(user_agent=(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36"
+        ))
+        for fuel_key, url_slug in [("diesel", "diesel_prices"), ("benzin", "gasoline_prices")]:
+            try:
+                url = f"https://www.globalpetrolprices.com/Morocco/{url_slug}/"
+                await page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                await page.wait_for_timeout(2000)
+                price_usd = await page.evaluate("""() => {
+                    // Strategie 1: Tabellenzeile mit "Morocco" → USD-Preis (0.5–2.0 Bereich)
+                    for (const row of document.querySelectorAll('tr')) {
+                        const t = row.textContent;
+                        if (t.includes('Morocco') || t.includes('Maroc')) {
+                            const m = t.match(/\\b([01]\\.\\d{3})\\b/);
+                            if (m) { const v = parseFloat(m[1]); if (v >= 0.5 && v <= 2.0) return v; }
+                        }
+                    }
+                    // Strategie 2: Erstes Dezimal im USD-Bereich in beliebiger Tabellenzelle
+                    for (const td of document.querySelectorAll('td')) {
+                        const m = td.textContent.trim().match(/^([01]\\.\\d{3})$/);
+                        if (m) { const v = parseFloat(m[1]); if (v >= 0.5 && v <= 2.0) return v; }
+                    }
+                    return null;
+                }""")
+                if price_usd:
+                    price_chf = round(price_usd * USD_TO_CHF, 3)
+                    results[fuel_key] = price_chf
+                    print(f"  ✓ Marokko {fuel_key}: {price_usd:.3f} USD/L → {price_chf:.3f} CHF/L")
+                else:
+                    print(f"  ✗ Marokko {fuel_key}: Kein Preis gefunden", file=sys.stderr)
+            except Exception as e:
+                print(f"  ✗ Marokko {fuel_key}: {e}", file=sys.stderr)
+        await browser.close()
+
+    return results
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 async def main():
@@ -334,6 +390,19 @@ async def main():
 
     data_dir = Path(__file__).parent.parent / "data"
     data_dir.mkdir(exist_ok=True)
+
+    # morocco-prices.json
+    morocco_raw = await scrape_morocco()
+    morocco_out = {
+        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "source": f"globalpetrolprices.com (USD → CHF, Kurs {USD_TO_CHF})",
+        "currency": "CHF",
+        "diesel": morocco_raw.get("diesel") or MOROCCO_FALLBACK["diesel"],
+        "benzin": morocco_raw.get("benzin") or MOROCCO_FALLBACK["benzin"],
+    }
+    morocco_path = data_dir / "morocco-prices.json"
+    morocco_path.write_text(json.dumps(morocco_out, indent=2, ensure_ascii=False))
+    print(f"Gespeichert: {morocco_path}")
 
     # canton-prices.json (aktueller Stand)
     out_path = data_dir / "canton-prices.json"

@@ -614,6 +614,7 @@ function showDetail(k, name) {
 /* ── LEGEND ───────────────────────────────────────────────────── */
 function updateLegend() {
   const vals = Object.values(prices()).filter(v=>!isNaN(v));
+  if (moroccoData && moroccoData[fuel]) vals.push(moroccoData[fuel]);
   pMin = Math.min(...vals); pMax = Math.max(...vals);
   document.getElementById('l-min').textContent = pMin.toFixed(3);
   document.getElementById('l-mid').textContent = ((pMin+pMax)/2).toFixed(3);
@@ -660,6 +661,7 @@ function setFuel(f) {
       refreshTooltip(l);
     });
   }
+  buildMoroccoLayer();
   renderList(); setDate();
   // refresh detail card if a canton is selected
   if (active) {
@@ -1034,6 +1036,57 @@ function toast(msg, ms=8000) {
   setTimeout(()=>el.style.display='none', ms);
 }
 
+/* ── MAROKKO ──────────────────────────────────────────────────── */
+let moroccoData = null;   // { diesel: CHF, benzin: CHF }
+let moroccoGeo  = null;   // GeoJSON FeatureCollection
+let moroccoLayer = null;  // Leaflet layer
+
+async function loadMoroccoPrices() {
+  try {
+    const res = await fetch('./data/morocco-prices.json');
+    if (!res.ok) return;
+    moroccoData = await res.json();
+    console.log('morocco-prices.json geladen: Diesel', moroccoData.diesel, '| Benzin', moroccoData.benzin);
+  } catch(e) {
+    console.warn('morocco-prices.json nicht ladbar:', e.message);
+  }
+}
+
+async function fetchMoroccoGeo() {
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries/MAR.geo.json');
+    if (!res.ok) { console.warn('Morocco GeoJSON HTTP', res.status); return; }
+    const data = await res.json();
+    if (data.type === 'Feature') {
+      moroccoGeo = { type: 'FeatureCollection', features: [data] };
+    } else if (data.type === 'FeatureCollection') {
+      moroccoGeo = data;
+    }
+    console.log('Marokko-GeoJSON geladen');
+  } catch(e) {
+    console.warn('Marokko-GeoJSON nicht ladbar:', e.message);
+  }
+}
+
+function buildMoroccoLayer() {
+  if (moroccoLayer) { moroccoLayer.remove(); moroccoLayer = null; }
+  if (!moroccoGeo) return;
+  const price = moroccoData ? moroccoData[fuel] : null;
+  moroccoLayer = L.geoJSON(moroccoGeo, {
+    style: { fillColor: getColor(price), fillOpacity: price ? 0.80 : 0.12, color: '#0d1117', weight: 1.5 },
+    onEachFeature(f, layer) {
+      layer.bindTooltip(
+        `<b>Marokko</b> &nbsp; ${price ? price.toFixed(3)+' CHF/L' : 'k.A.'}`,
+        { sticky: true, direction: 'top', offset: [0, -4] }
+      );
+      layer.on({
+        mouseover(e) { e.target.setStyle({ weight:2.5, fillOpacity:.95, color:'#fff' }); e.target.bringToFront(); },
+        mouseout(e)  { if (moroccoLayer) moroccoLayer.resetStyle(e.target); }
+      });
+    }
+  }).addTo(map);
+}
+
 /* ── LIVE PREISE LADEN ────────────────────────────────────────── */
 async function loadLivePrices() {
   try {
@@ -1082,11 +1135,15 @@ async function loadLivePrices() {
 (async () => {
   updateLegend();
   try {
-    const [geo] = await Promise.all([fetchGeo(), loadLivePrices(), loadPriceHistory()]);
+    const [geo] = await Promise.all([
+      fetchGeo(), loadLivePrices(), loadPriceHistory(),
+      loadMoroccoPrices(), fetchMoroccoGeo()
+    ]);
     geoData = geo;
     ovMsg('Karte wird gerendert…');
     updateLegend();
     buildLayer(geoData);
+    buildMoroccoLayer();
     renderList(); setDate();
     document.getElementById('status-dot').className = '';
   } catch(e) {
