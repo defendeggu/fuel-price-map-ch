@@ -391,16 +391,27 @@ async def main():
     data_dir = Path(__file__).parent.parent / "data"
     data_dir.mkdir(exist_ok=True)
 
-    # morocco-prices.json
-    morocco_raw = await scrape_morocco()
-    morocco_out = {
-        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "source": f"globalpetrolprices.com (USD → CHF, Kurs {USD_TO_CHF})",
-        "currency": "CHF",
-        "diesel": morocco_raw.get("diesel") or MOROCCO_FALLBACK["diesel"],
-        "benzin": morocco_raw.get("benzin") or MOROCCO_FALLBACK["benzin"],
-    }
+    # morocco-prices.json (aktueller Preis + Vortagespreis für Δ-Anzeige)
     morocco_path = data_dir / "morocco-prices.json"
+    morocco_prev = {}
+    if morocco_path.exists():
+        try:
+            old = json.loads(morocco_path.read_text())
+            morocco_prev = {"diesel_prev": old.get("diesel"), "benzin_prev": old.get("benzin")}
+        except Exception:
+            pass
+    morocco_raw = await scrape_morocco()
+    d_new = morocco_raw.get("diesel") or MOROCCO_FALLBACK["diesel"]
+    b_new = morocco_raw.get("benzin") or MOROCCO_FALLBACK["benzin"]
+    morocco_out = {
+        "updated":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "source":      f"globalpetrolprices.com (USD → CHF, Kurs {USD_TO_CHF})",
+        "currency":    "CHF",
+        "diesel":      d_new,
+        "benzin":      b_new,
+        "diesel_prev": morocco_prev.get("diesel_prev", d_new),
+        "benzin_prev": morocco_prev.get("benzin_prev", b_new),
+    }
     morocco_path.write_text(json.dumps(morocco_out, indent=2, ensure_ascii=False))
     print(f"Gespeichert: {morocco_path}")
 

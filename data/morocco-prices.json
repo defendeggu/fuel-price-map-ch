@@ -3,5 +3,7 @@
   "source": "globalpetrolprices.com (USD → CHF, Kurs 0.9)",
   "currency": "CHF",
   "diesel": 1.04,
-  "benzin": 1.2
+  "benzin": 1.2,
+  "diesel_prev": 1.04,
+  "benzin_prev": 1.2
 }

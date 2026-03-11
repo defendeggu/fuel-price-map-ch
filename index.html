@@ -614,7 +614,6 @@ function showDetail(k, name) {
 /* ── LEGEND ───────────────────────────────────────────────────── */
 function updateLegend() {
   const vals = Object.values(prices()).filter(v=>!isNaN(v));
-  if (moroccoData && moroccoData[fuel]) vals.push(moroccoData[fuel]);
   pMin = Math.min(...vals); pMax = Math.max(...vals);
   document.getElementById('l-min').textContent = pMin.toFixed(3);
   document.getElementById('l-mid').textContent = ((pMin+pMax)/2).toFixed(3);
@@ -1068,15 +1067,33 @@ async function fetchMoroccoGeo() {
   }
 }
 
+// Marokko-Farbe: grün (billiger) ↔ blau (gleich) ↔ rot (teurer), Schwelle ±0.05 CHF
+function getMoroccoColor(price, prev) {
+  if (!price || !prev) return '#27323f';
+  const delta = price - prev;
+  const t = Math.max(-1, Math.min(1, delta / 0.05)); // -1…+1
+  const green = [52,211,153], blue = [56,189,248], red = [239,68,68];
+  const [a, b_] = t < 0 ? [green, blue] : [blue, red];
+  const f = Math.abs(t);
+  return `rgb(${Math.round(a[0]+(b_[0]-a[0])*f)},${Math.round(a[1]+(b_[1]-a[1])*f)},${Math.round(a[2]+(b_[2]-a[2])*f)})`;
+}
+
 function buildMoroccoLayer() {
   if (moroccoLayer) { moroccoLayer.remove(); moroccoLayer = null; }
   if (!moroccoGeo) return;
+  const fuelPrev = fuel + '_prev';
   const price = moroccoData ? moroccoData[fuel] : null;
+  const prev  = moroccoData ? moroccoData[fuelPrev] : null;
+  const color = getMoroccoColor(price, prev);
+  const delta = (price && prev) ? price - prev : null;
+  const deltaStr = delta !== null
+    ? (delta > 0.001 ? ` &nbsp;↑ +${delta.toFixed(3)}` : delta < -0.001 ? ` &nbsp;↓ ${delta.toFixed(3)}` : ' &nbsp;→ ±0.000')
+    : '';
   moroccoLayer = L.geoJSON(moroccoGeo, {
-    style: { fillColor: getColor(price), fillOpacity: price ? 0.80 : 0.12, color: '#0d1117', weight: 1.5 },
+    style: { fillColor: color, fillOpacity: price ? 0.80 : 0.12, color: '#0d1117', weight: 1.5 },
     onEachFeature(f, layer) {
       layer.bindTooltip(
-        `<b>Marokko</b> &nbsp; ${price ? price.toFixed(3)+' CHF/L' : 'k.A.'}`,
+        `<b>Marokko</b> &nbsp; ${price ? price.toFixed(3)+' CHF/L' : 'k.A.'}${deltaStr} <span style="color:var(--muted);font-size:11px">(ggü. Vortag)</span>`,
         { sticky: true, direction: 'top', offset: [0, -4] }
       );
       layer.on({
