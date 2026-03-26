@@ -448,6 +448,26 @@ async def main():
     hist_path.write_text(json.dumps(history, separators=(",", ":"), ensure_ascii=False))
     print(f"Verlauf: {hist_path} ({len(history['entries'])} Einträge)")
 
+    # morocco-history.json (akkumulierter Verlauf)
+    morocco_hist_path = data_dir / "morocco-history.json"
+    morocco_hist = {"entries": []}
+    if morocco_hist_path.exists():
+        try:
+            morocco_hist = json.loads(morocco_hist_path.read_text())
+        except Exception:
+            pass
+    morocco_hist_entries = morocco_hist.setdefault("entries", [])
+    m_idx = next((i for i, e in enumerate(morocco_hist_entries) if e.get("date") == today_str), None)
+    m_entry = {"date": today_str, "diesel": d_new, "benzin": b_new}
+    if m_idx is not None:
+        morocco_hist_entries[m_idx] = m_entry
+    else:
+        morocco_hist_entries.append(m_entry)
+    morocco_hist_entries.sort(key=lambda e: e["date"])
+    morocco_hist["entries"] = morocco_hist_entries[-400:]
+    morocco_hist_path.write_text(json.dumps(morocco_hist, separators=(",", ":"), ensure_ascii=False))
+    print(f"Verlauf: {morocco_hist_path} ({len(morocco_hist['entries'])} Einträge)")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

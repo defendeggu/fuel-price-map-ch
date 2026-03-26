@@ -611,6 +611,30 @@ function showDetail(k, name) {
   openAside();
 }
 
+function showMoroccoDetail() {
+  const price = moroccoData ? moroccoData[fuel] : null;
+  const prev  = moroccoData ? moroccoData[fuel + '_prev'] : null;
+  const delta = (price && prev) ? price - prev : null;
+  const deltaStr = delta !== null
+    ? (delta > 0.001 ? `+${delta.toFixed(3)}` : delta < -0.001 ? `${delta.toFixed(3)}` : '±0.000')
+    : '–';
+  const color = price ? getMoroccoColor(price, prev) : 'var(--muted)';
+  const otherPrice = moroccoData ? moroccoData[otherFuel()] : null;
+  document.getElementById('detail-block').innerHTML = `
+    <div class="s-label">Ausgewähltes Land</div>
+    <div id="detail-name">Marokko</div>
+    <div id="detail-abbr">MA</div>
+    ${price
+      ? `<div id="detail-price" style="color:${color}">${price.toFixed(3)}</div>
+         <div id="detail-unit">CHF / Liter ${fuelLabel(fuel)}</div>
+         <div id="detail-rank">Ggü. Vortag: ${deltaStr} CHF/L</div>
+         <div id="detail-other">${fuelLabel(otherFuel())}: ${otherPrice ? otherPrice.toFixed(3)+' CHF/L' : 'k.A.'}</div>
+         <button class="chart-btn" onclick="openChart('MA','Marokko')">Preisverlauf →</button>`
+      : `<div style="color:var(--muted);font-size:13px;margin-top:12px;font-style:italic">Kein Preis verfügbar</div>`
+    }`;
+  openAside();
+}
+
 /* ── LEGEND ───────────────────────────────────────────────────── */
 function updateLegend() {
   const vals = Object.values(prices()).filter(v=>!isNaN(v));
@@ -697,7 +721,8 @@ function estimatedPrice(canton, date, fuelType) {
 }
 
 /* ── LIVE PRICE HISTORY ───────────────────────────────────────── */
-let priceHistory = null; // geladen aus data/price-history.json
+let priceHistory   = null; // geladen aus data/price-history.json
+let moroccoHistory = null; // geladen aus data/morocco-history.json
 
 async function loadPriceHistory() {
   try {
@@ -707,6 +732,17 @@ async function loadPriceHistory() {
     console.log('price-history.json geladen:', priceHistory.entries?.length, 'Einträge');
   } catch(e) {
     console.warn('price-history.json nicht verfügbar:', e.message);
+  }
+}
+
+async function loadMoroccoHistory() {
+  try {
+    const res = await fetch('./data/morocco-history.json');
+    if (!res.ok) return;
+    moroccoHistory = await res.json();
+    console.log('morocco-history.json geladen:', moroccoHistory.entries?.length, 'Einträge');
+  } catch(e) {
+    console.warn('morocco-history.json nicht verfügbar:', e.message);
   }
 }
 
@@ -760,6 +796,52 @@ function getHistoryPoints(canton, rangeMonths) {
   return points;
 }
 
+// Gibt Array von {date, label, diesel, benzin, isReal} für Marokko zurück
+function getMoroccoHistoryPoints(rangeMonths) {
+  const endDate   = new Date(TODAY);
+  const startDate = new Date(TODAY);
+  startDate.setMonth(startDate.getMonth() - rangeMonths);
+
+  const totalDays = rangeMonths * 30;
+  const step      = totalDays <= 30 ? 2 : totalDays <= 60 ? 4 : totalDays <= 90 ? 7 : totalDays <= 180 ? 14 : 28;
+
+  const entries = moroccoHistory?.entries || [];
+
+  function closestMoroccoEntry(date, maxDaysDist) {
+    const targetMs = date.getTime();
+    let best = null, bestDist = Infinity;
+    for (const e of entries) {
+      const dist = Math.abs(new Date(e.date).getTime() - targetMs);
+      if (dist < bestDist) { bestDist = dist; best = e; }
+    }
+    return bestDist <= maxDaysDist * 86400000 ? best : null;
+  }
+
+  const points = [];
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + step)) {
+    const snap  = new Date(d);
+    const label = snap.toLocaleDateString('de-CH', {day:'2-digit', month:'2-digit',
+                    year: rangeMonths > 6 ? '2-digit' : undefined});
+    const entry = closestMoroccoEntry(snap, Math.floor(step / 2));
+    if (entry) {
+      points.push({ date: snap, label, diesel: entry.diesel, benzin: entry.benzin, isReal: true });
+    } else {
+      // Extrapoliere mit dem letzten bekannten Wert (flache Linie)
+      const fallback = closestMoroccoEntry(snap, 9999);
+      if (fallback) {
+        points.push({ date: snap, label, diesel: fallback.diesel, benzin: fallback.benzin, isReal: false });
+      }
+    }
+  }
+  // Letzten Punkt immer auf aktuellsten echten Eintrag setzen
+  if (points.length && entries.length) {
+    const last = [...entries].sort((a,b) => b.date.localeCompare(a.date))[0];
+    const lp = points[points.length - 1];
+    lp.diesel = last.diesel; lp.benzin = last.benzin; lp.isReal = true;
+  }
+  return points;
+}
+
 /* ── CHART MODAL ──────────────────────────────────────────────── */
 let chartInstance      = null;
 let chartCanton        = null;
@@ -791,7 +873,8 @@ function buildDataset(points, fuelType, color, bgColor) {
 }
 
 function renderChart(canton, rangeMonths) {
-  const points = getHistoryPoints(canton, rangeMonths);
+  const isMorocco = canton === 'MA';
+  const points = isMorocco ? getMoroccoHistoryPoints(rangeMonths) : getHistoryPoints(canton, rangeMonths);
   const hasAnyReal      = points.some(p => p.isReal);
   const hasAnyEstimated = points.some(p => !p.isReal);
   const allReal         = hasAnyReal && !hasAnyEstimated;
@@ -804,7 +887,19 @@ function renderChart(canton, rangeMonths) {
 
   // Disclaimer
   const est = document.getElementById('chart-estimate');
-  if (allReal) {
+  if (isMorocco) {
+    if (allReal) {
+      est.textContent = '✓ Echte Daten (globalpetrolprices.com)';
+      est.style.color = '#22c55e';
+    } else if (!hasAnyReal) {
+      est.textContent = '⚠ Noch keine historischen Daten verfügbar';
+      est.style.color = '#f59e0b';
+    } else {
+      const realCount = points.filter(p=>p.isReal).length;
+      est.textContent = `⚠ Teils extrapoliert – ${realCount}/${points.length} Datenpunkte: globalpetrolprices.com`;
+      est.style.color = '#f59e0b';
+    }
+  } else if (allReal) {
     est.textContent = '✓ Echte TCS-Stationsdaten (benzin.tcs.ch)';
     est.style.color = '#22c55e';
   } else if (!hasAnyReal) {
@@ -1098,7 +1193,8 @@ function buildMoroccoLayer() {
       );
       layer.on({
         mouseover(e) { e.target.setStyle({ weight:2.5, fillOpacity:.95, color:'#fff' }); e.target.bringToFront(); },
-        mouseout(e)  { if (moroccoLayer) moroccoLayer.resetStyle(e.target); }
+        mouseout(e)  { if (moroccoLayer) moroccoLayer.resetStyle(e.target); },
+        click()      { showMoroccoDetail(); }
       });
     }
   }).addTo(map);
@@ -1154,7 +1250,7 @@ async function loadLivePrices() {
   try {
     const [geo] = await Promise.all([
       fetchGeo(), loadLivePrices(), loadPriceHistory(),
-      loadMoroccoPrices(), fetchMoroccoGeo()
+      loadMoroccoPrices(), fetchMoroccoGeo(), loadMoroccoHistory()
     ]);
     geoData = geo;
     ovMsg('Karte wird gerendert…');
