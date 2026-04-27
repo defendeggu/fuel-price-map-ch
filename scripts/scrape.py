@@ -238,7 +238,66 @@ async def strategy_tcs(email: str, password: str) -> tuple[dict | None, str]:
         return None, ""
 
 
-# ── Strategie 2: GlobalPetrolPrices Fallback ──────────────────────────────────
+# ── Strategie 2: Firestore direkt (kein Login) ───────────────────────────────
+
+async def strategy_firestore_direct() -> tuple[dict | None, str]:
+    """Strategie 2: Firestore ohne Auth-Token (API-Key genügt)."""
+    import aiohttp
+    print("Strategie 2: Firestore direkt (ohne Login) …")
+    diesel_by_canton = defaultdict(list)
+    benzin_by_canton = defaultdict(list)
+    total      = 0
+    page_token = None
+    try:
+        async with aiohttp.ClientSession() as sess:
+            while True:
+                url = f"{FIRESTORE_BASE}/stations?pageSize=300&key={FIREBASE_API_KEY}"
+                if page_token:
+                    url += f"&pageToken={page_token}"
+                async with sess.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status != 200:
+                        print(f"  Firestore HTTP {resp.status}", file=sys.stderr)
+                        return None, ""
+                    data = await resp.json()
+                docs = data.get("documents", [])
+                if not docs:
+                    break
+                for doc in docs:
+                    fields  = doc.get("fields", {})
+                    address = (fields.get("formattedAddress") or {}).get("stringValue", "")
+                    canton  = plz_to_canton(address)
+                    if not canton:
+                        continue
+                    fuel_col = (fields.get("fuelCollection") or {}).get("mapValue", {}).get("fields", {})
+                    d_fields = fuel_col.get("DIESEL", {}).get("mapValue", {}).get("fields", {})
+                    d_price  = (d_fields.get("displayPrice") or {}).get("doubleValue")
+                    if d_price and 1.0 < d_price < 3.0:
+                        diesel_by_canton[canton].append(d_price)
+                    for sp_key in ["SP95", "SUPER", "BLEIFREI95", "RON95", "E10"]:
+                        sp_f = fuel_col.get(sp_key, {}).get("mapValue", {}).get("fields", {})
+                        sp_p = (sp_f.get("displayPrice") or {}).get("doubleValue")
+                        if sp_p and 1.0 < sp_p < 3.0:
+                            benzin_by_canton[canton].append(sp_p)
+                            break
+                    total += 1
+                page_token = data.get("nextPageToken")
+                print(f"    {total} Stationen geladen …", end="\r")
+                if not page_token:
+                    break
+        print(f"\n  {total} Stationen | {len(diesel_by_canton)} Kantone mit Diesel-Daten")
+        if total < 100:
+            print("  Zu wenig Stationen – Strategie 2 ungültig", file=sys.stderr)
+            return None, ""
+        return {
+            "diesel": {kz: round(sum(v)/len(v), 3) for kz, v in diesel_by_canton.items() if v},
+            "benzin": {kz: round(sum(v)/len(v), 3) for kz, v in benzin_by_canton.items() if v},
+        }, "benzin.tcs.ch via Firestore (Stationsdurchschnitt pro Kanton)"
+    except Exception as e:
+        print(f"  Fehler: {e}", file=sys.stderr)
+        return None, ""
+
+
+# ── Strategie 3: GlobalPetrolPrices Fallback ──────────────────────────────────
 
 async def fetch_price_gpp(page, url: str) -> float | None:
     try:
@@ -351,16 +410,24 @@ async def main():
     canton_prices = None
     source_label  = ""
 
-    if email and password:
+    # Strategie 1: Firestore direkt ohne Login (schnell, kein Auth nötig)
+    canton_prices, source_label = await strategy_firestore_direct()
+    if canton_prices:
+        print("Strategie 1 (Firestore direkt) erfolgreich.")
+
+    # Strategie 2: TCS-Login + Firestore (Fallback falls DB wieder gesichert wird)
+    if not canton_prices and email and password:
         canton_prices, source_label = await strategy_tcs(email, password)
         if canton_prices:
-            print("Strategie 1 erfolgreich.")
+            print("Strategie 2 (TCS-Login) erfolgreich.")
         else:
-            print("Strategie 1 ohne Ergebnis, verwende Fallback.")
-    else:
-        print("Keine TCS-Credentials, überspringe Strategie 1.")
+            print("Strategie 2 ohne Ergebnis.")
+    elif not canton_prices:
+        print("Keine TCS-Credentials, überspringe Strategie 2.")
 
+    # Strategie 3: GlobalPetrolPrices.com (letzter Ausweg)
     if not canton_prices:
+        print("Alle Firestore-Strategien fehlgeschlagen, verwende GPP-Fallback.")
         canton_prices, source_label = await strategy_fallback()
 
     # Fehlende Kantone mit Offset-Schätzung auffüllen
@@ -423,7 +490,7 @@ async def main():
     # price-history.json (akkumulierter Verlauf) – nur bei echten TCS-Daten
     today_str    = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     hist_path    = data_dir / "price-history.json"
-    is_tcs       = "tcs" in source_label.lower()
+    is_tcs       = "firestore" in source_label.lower() or "tcs" in source_label.lower()
 
     if is_tcs:
         history = {"entries": []}
