@@ -1,8 +1,8 @@
 {
-  "updated": "2026-04-27T10:34:10Z",
+  "updated": "2026-04-27T10:37:05Z",
   "national": {
-    "diesel": 2.091,
-    "benzin": 1.834
+    "diesel": 2.087,
+    "benzin": 1.832
   },
   "source": "benzin.tcs.ch via Firestore (Stationsdurchschnitt pro Kanton)",
   "cantons": {
@@ -27,8 +27,8 @@
       "benzin": 1.9
     },
     "GE": {
-      "diesel": 2.073,
-      "benzin": 1.817
+      "diesel": 2.07,
+      "benzin": 1.815
     },
     "TI": {
       "diesel": 2.15,
