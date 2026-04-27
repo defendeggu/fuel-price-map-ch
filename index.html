@@ -774,22 +774,28 @@ function getHistoryPoints(canton, rangeMonths) {
     const entry = closestRealEntry(snap, Math.floor(step/2));
     const label = snap.toLocaleDateString('de-CH', {day:'2-digit', month:'2-digit',
                     year: rangeMonths > 6 ? '2-digit' : undefined});
-    if (entry?.cantons?.[canton]) {
+    if (entry?.cantons?.[canton] && entry.source !== 'estimated') {
       points.push({ date: snap, label, diesel: entry.cantons[canton].diesel,
                     benzin: entry.cantons[canton].benzin, isReal: true });
+    } else if (entry?.cantons?.[canton] && entry.source === 'estimated') {
+      points.push({ date: snap, label, diesel: entry.cantons[canton].diesel,
+                    benzin: entry.cantons[canton].benzin, isReal: false });
     } else {
       points.push({ date: snap, label,
                     diesel: estimatedPrice(canton, snap, 'diesel'),
                     benzin: estimatedPrice(canton, snap, 'benzin'), isReal: false });
     }
   }
-  // Letzten Punkt immer auf heute / aktuellsten echten Eintrag setzen
-  if (points.length) {
-    const lastEntry = closestRealEntry(TODAY, 3);
-    if (lastEntry?.cantons?.[canton]) {
-      const last = points[points.length-1];
-      last.diesel = lastEntry.cantons[canton].diesel;
-      last.benzin = lastEntry.cantons[canton].benzin;
+  // Letzten Punkt immer auf den aktuellsten echten TCS-Eintrag setzen (bis 30 Tage zurück)
+  if (points.length && priceHistory?.entries?.length) {
+    const tcsEntries = [...priceHistory.entries]
+      .filter(e => e.source !== 'estimated' && e.cantons?.[canton])
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const lastTcs = tcsEntries[0];
+    if (lastTcs) {
+      const last = points[points.length - 1];
+      last.diesel = lastTcs.cantons[canton].diesel;
+      last.benzin = lastTcs.cantons[canton].benzin;
       last.isReal = true;
     }
   }
