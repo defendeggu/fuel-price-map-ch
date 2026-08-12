@@ -1,94 +1,94 @@
 {
-  "updated": "2026-08-11T01:01:48Z",
+  "updated": "2026-08-12T01:08:56Z",
   "national": {
-    "diesel": 2.138,
+    "diesel": 2.141,
     "benzin": 1.936
   },
   "source": "benzin.tcs.ch (Cloud Function, Stationsdurchschnitt pro Kanton)",
   "cantons": {
     "BL": {
-      "diesel": 2.113,
-      "benzin": 1.92
+      "diesel": 2.115,
+      "benzin": 1.918
     },
     "AG": {
-      "diesel": 2.132,
-      "benzin": 1.917
+      "diesel": 2.133,
+      "benzin": 1.914
     },
     "SH": {
-      "diesel": 2.153,
-      "benzin": 1.944
+      "diesel": 2.16,
+      "benzin": 1.945
     },
     "SO": {
-      "diesel": 2.112,
+      "diesel": 2.116,
       "benzin": 1.891
     },
     "BS": {
-      "diesel": 2.162,
-      "benzin": 1.948
+      "diesel": 2.172,
+      "benzin": 1.95
     },
     "GE": {
-      "diesel": 2.121,
-      "benzin": 1.92
+      "diesel": 2.123,
+      "benzin": 1.919
     },
     "TI": {
-      "diesel": 2.113,
-      "benzin": 1.911
+      "diesel": 2.117,
+      "benzin": 1.914
     },
     "TG": {
-      "diesel": 2.145,
-      "benzin": 1.943
-    },
-    "VS": {
-      "diesel": 2.147,
-      "benzin": 1.967
-    },
-    "VD": {
-      "diesel": 2.179,
-      "benzin": 1.992
-    },
-    "NE": {
-      "diesel": 2.145,
-      "benzin": 1.916
-    },
-    "JU": {
-      "diesel": 2.089,
-      "benzin": 1.839
-    },
-    "BE": {
-      "diesel": 2.123,
-      "benzin": 1.909
-    },
-    "LU": {
-      "diesel": 2.128,
-      "benzin": 1.901
-    },
-    "FR": {
-      "diesel": 2.135,
-      "benzin": 1.931
-    },
-    "ZH": {
-      "diesel": 2.164,
-      "benzin": 1.975
-    },
-    "SG": {
-      "diesel": 2.139,
+      "diesel": 2.146,
       "benzin": 1.942
     },
-    "ZG": {
-      "diesel": 2.162,
+    "VS": {
+      "diesel": 2.148,
       "benzin": 1.968
     },
+    "VD": {
+      "diesel": 2.186,
+      "benzin": 1.99
+    },
+    "NE": {
+      "diesel": 2.15,
+      "benzin": 1.918
+    },
+    "JU": {
+      "diesel": 2.095,
+      "benzin": 1.843
+    },
+    "BE": {
+      "diesel": 2.124,
+      "benzin": 1.908
+    },
+    "LU": {
+      "diesel": 2.13,
+      "benzin": 1.903
+    },
+    "FR": {
+      "diesel": 2.137,
+      "benzin": 1.932
+    },
+    "ZH": {
+      "diesel": 2.167,
+      "benzin": 1.974
+    },
+    "SG": {
+      "diesel": 2.141,
+      "benzin": 1.94
+    },
+    "ZG": {
+      "diesel": 2.157,
+      "benzin": 1.964
+    },
     "SZ": {
-      "diesel": 2.112,
-      "benzin": 1.925
+      "diesel": 2.119,
+      "benzin": 1.927
     },
     "AR": {
-      "diesel": 2.128,
+      "diesel": 2.129,
       "benzin": 1.933
     },
     "NW": {
-      "diesel": 2.168,
-      "benzin": 1.976
+      "diesel": 2.164,
+      "benzin": 1.973
     },
     "OW": {
       "diesel": 2.155,
@@ -99,16 +99,16 @@
       "benzin": 1.952
     },
     "GL": {
-      "diesel": 2.109,
-      "benzin": 1.924
+      "diesel": 2.115,
+      "benzin": 1.917
     },
     "GR": {
-      "diesel": 2.111,
-      "benzin": 1.934
+      "diesel": 2.108,
+      "benzin": 1.932
     },
     "UR": {
-      "diesel": 2.203,
-      "benzin": 2.007
+      "diesel": 2.208,
+      "benzin": 2.004
     }
   }
 }
