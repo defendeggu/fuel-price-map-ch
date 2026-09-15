@@ -81,6 +81,12 @@
     main { display: flex; flex: 1; overflow: hidden; }
     #map  { flex: 1; }
     .leaflet-container { background: #0d1117 !important; }
+    .leaflet-tile-pane { filter: grayscale(1) invert(1) brightness(0.85) contrast(1.05); }
+    .leaflet-control-attribution {
+      background: rgba(13,17,23,.7) !important; color: var(--muted) !important;
+      font-family: var(--mono) !important; font-size: 9px !important;
+    }
+    .leaflet-control-attribution a { color: var(--muted) !important; }
     aside {
       width: 270px; background: var(--bg2);
       border-left: 1px solid var(--border);
@@ -469,8 +475,9 @@ function fuelLabel(f) { return f === 'diesel' ? 'Diesel' : 'Benzin 95'; }
 
 /* ── MAP INIT ─────────────────────────────────────────────────── */
 const map = L.map('map', { center:[46.80,8.25], zoom:8, zoomControl:true, attributionControl:false });
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-  { subdomains:'abcd', maxZoom:20 }).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { subdomains:'abc', maxZoom:19, attribution:'&copy; OpenStreetMap' }).addTo(map);
+L.control.attribution({ position:'bottomright', prefix:false }).addTo(map);
 
 /* ── COLOR SCALE ──────────────────────────────────────────────── */
 let pMin, pMax;
