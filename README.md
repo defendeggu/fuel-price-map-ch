@@ -54,16 +54,15 @@ Täglich um **01:00 Uhr CET** läuft ein GitHub Actions Workflow:
 5. Kantonspreise = Ø aller Stationspreise pro Kanton
 6. Ergebnis wird als `data/canton-prices.json` committed
 7. Eintrag für den heutigen Tag wird in `data/price-history.json` geschrieben (max. 400 Tage, für Charts)
-8. Commit & Push; die Webseite lädt beim Start automatisch die aktuellsten Daten
+
+**Fallback**: Falls der TCS-Login nicht verfügbar ist, wird automatisch auf den nationalen Durchschnitt von [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/Switzerland/) + BFS-Kantonsoffsets zurückgegriffen.
 
 ```
 .github/workflows/scrape.yml   ← Cron-Job (täglich 01:00 CET)
-scripts/scrape.py              ← Playwright-Login + Firestore-Abfrage
-data/canton-prices.json        ← Aktuelle Preise (täglich generiert)
+scripts/scrape.py              ← Playwright-Login + Firestore-Scrape
+data/canton-prices.json        ← CH-Kantonspreise (täglich generiert)
 data/price-history.json        ← Verlaufsdaten pro Kanton (täglich akkumuliert)
 ```
-
-**Fallback**: Falls der TCS-Login nicht verfügbar ist, wird automatisch auf den nationalen Durchschnitt von [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/Switzerland/) + BFS-Kantonsoffsets zurückgegriffen.
 
 ---
 
@@ -71,9 +70,10 @@ data/price-history.json        ← Verlaufsdaten pro Kanton (täglich akkumulier
 
 | Quelle | Verwendung |
 |---|---|
-| [benzin.tcs.ch](https://benzin.tcs.ch) | Stationspreise (~3900 Stationen, Ø pro Kanton) |
+| [benzin.tcs.ch](https://benzin.tcs.ch) | CH-Stationspreise (~3900 Stationen, Ø pro Kanton) |
+| [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/) | CH-Fallback-Preise |
 | [swisstopo](https://swisstopo.admin.ch) | Kantonsgrenzen (TopoJSON) |
-| [CartoDB Dark Matter](https://carto.com/basemaps/) | Hintergrundkarte |
+| [OpenStreetMap](https://www.openstreetmap.org/) | Hintergrundkarte |
 
 ### Preisverlauf (Chart)
 Seit März 2026 werden täglich echte TCS-Kantonspreise in `data/price-history.json` akkumuliert. Der Chart zeigt:
