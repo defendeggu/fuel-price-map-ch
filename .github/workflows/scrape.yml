@@ -6,9 +6,14 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:  # Manuell auslösbar
 
+concurrency:
+  group: scrape
+  cancel-in-progress: false
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
 
@@ -20,17 +25,14 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-          cache: pip
 
-      - name: Install dependencies
-        run: |
-          pip install playwright aiohttp
-          playwright install chromium --with-deps
+      # Der Scraper nutzt nur die Standardbibliothek (kein pip install nötig).
+      - name: Unit-Tests
+        run: python -m unittest discover -s tests -p 'test_*.py'
 
+      # Schlägt fehl (Workflow rot → Mail), wenn der Abruf scheitert oder die Daten
+      # unplausibel sind. Dann wird nichts committet.
       - name: Scrape Preise
-        env:
-          TCS_EMAIL: ${{ secrets.TCS_EMAIL }}
-          TCS_PASSWORD: ${{ secrets.TCS_PASSWORD }}
         run: python scripts/scrape.py
 
       - name: Commit & Push (falls geändert)
@@ -40,4 +42,5 @@ jobs:
           git add data/canton-prices.json data/price-history.json
           git diff --cached --quiet || \
             git commit -m "chore: Treibstoffpreise $(date -u +%Y-%m-%d) [skip ci]"
+          git pull --rebase
           git push

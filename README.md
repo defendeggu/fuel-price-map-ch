@@ -25,15 +25,14 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 - Im Detailbereich: «Preisverlauf →» anklicken
 - Modal mit Linienchart: Diesel (orange) und Benzin 95 (blau)
 - Zeitraum wählbar: **1M / 2M / 3M / 6M / 12M**
-- Echte TCS-Tagesdaten (durchgezogene Linie) vs. geschätzte Werte (gestrichelte Linie) klar deklariert
-- Disclaimer zeigt grün «Echte TCS-Daten» oder amber «Teils geschätzt» je nach Datenlage
+- Nur echte Tageswerte; gestrichelt = ältere Werte mit PLZ-Zuordnung (ungenau)
 - Interaktiver Tooltip beim Hovern
 - Schliessen: ✕, Klick ausserhalb oder ESC
 
 ### Zeitreise-Datepicker
 - Datumsfeld oben rechts («Stand: …») anklicken
 - Kalender mit verfügbaren Tagen
-- Datum auswählen → Karte, Rangliste und Detailansicht zeigen interpolierte Preise für diesen Tag
+- Nur Tage mit Daten sind wählbar → Karte, Rangliste und Detailansicht zeigen die echten Preise dieses Tages
 
 ### Responsives Design
 - Vollständig bedienbar auf Handy und Tablet
@@ -47,22 +46,25 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 
 Täglich um **01:00 Uhr CET** läuft ein GitHub Actions Workflow:
 
-1. Python-Scraper (`scripts/scrape.py`) loggt sich auf [benzin.tcs.ch](https://benzin.tcs.ch) ein (Azure B2C → Firebase)
-2. Firebase ID-Token wird aus dem Netzwerk-Traffic abgegriffen
-3. Alle ~3900 Stationen werden aus der Firestore-Datenbank geladen
-4. PLZ aus Stationsadresse → Kanton (Swiss PLZ-Mapping)
-5. Kantonspreise = Ø aller Stationspreise pro Kanton
-6. Ergebnis wird als `data/canton-prices.json` committed
-7. Eintrag für den heutigen Tag wird in `data/price-history.json` geschrieben (max. 400 Tage, für Charts)
-
-**Fallback**: Falls der TCS-Login nicht verfügbar ist, wird automatisch auf den nationalen Durchschnitt von [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/Switzerland/) + BFS-Kantonsoffsets zurückgegriffen.
+1. Unit-Tests (`tests/test_scrape.py`) laufen zuerst
+2. `scripts/scrape.py` ruft alle Stationen (Diesel, Benzin 95) von der öffentlichen TCS-Cloud-Function ab (Zoom 18, damit keine Cluster entstehen, rund 3900 Stationen)
+3. Jede Station wird per **Koordinate** dem Kanton zugeordnet (Point-in-Polygon gegen `data/cantons.topo.json`); Ausland (FL, Euro-Airport) fällt weg, Samnaun (zollfrei) wird ausgeschlossen
+4. Ausreisserpreise (±40 % vom Landesmedian) werden verworfen; Kantonswert = **Median** der Stationspreise, mit Stationszahl
+5. Plausibilitätsprüfung: alle 26 Kantone belegt, genug Stationen, kein Sprung > 15 % zum letzten Stand. Sonst endet der Lauf mit Fehler (Workflow rot, Mail von GitHub) und es wird **nichts** committet. Es gibt keine geschätzten oder erfundenen Werte
+6. `data/canton-prices.json` (aktueller Stand) und `data/price-history.json` (Tagesverlauf, max. 400 Tage) werden committet
 
 ```
 .github/workflows/scrape.yml   ← Cron-Job (täglich 01:00 CET)
-scripts/scrape.py              ← Playwright-Login + Firestore-Scrape
-data/canton-prices.json        ← CH-Kantonspreise (täglich generiert)
-data/price-history.json        ← Verlaufsdaten pro Kanton (täglich akkumuliert)
+scripts/scrape.py              ← Abruf, Aggregation, Plausibilitätsprüfung
+scripts/cantons.py             ← Koordinate → Kanton (nur Standardbibliothek)
+data/cantons.topo.json         ← Kantonsgrenzen (TopoJSON)
+data/canton-prices.json        ← Aktuelle Preise inkl. Stationszahl
+data/price-history.json        ← Verlauf pro Kanton (täglich akkumuliert)
+tests/test_scrape.py           ← Unit-Tests (unittest)
+tests/app.spec.js              ← E2E-Tests der Karte (Playwright)
 ```
+
+**Hinweis zur Historie:** Einträge bis 13.11.2026 ordneten Stationen noch per PLZ-Tabelle den Kantonen zu (ungenau, Genf hatte keine eigenen Daten). Im Chart sind sie gestrichelt markiert. Ab `geo: true` gilt die Koordinaten-Zuordnung.
 
 ---
 
@@ -70,17 +72,12 @@ data/price-history.json        ← Verlaufsdaten pro Kanton (täglich akkumulier
 
 | Quelle | Verwendung |
 |---|---|
-| [benzin.tcs.ch](https://benzin.tcs.ch) | CH-Stationspreise (~3900 Stationen, Ø pro Kanton) |
-| [GlobalPetrolPrices.com](https://www.globalpetrolprices.com/) | CH-Fallback-Preise |
+| [benzin.tcs.ch](https://benzin.tcs.ch) | CH-Stationspreise (~3900 Stationen, Median pro Kanton) |
 | [swisstopo](https://swisstopo.admin.ch) | Kantonsgrenzen (TopoJSON) |
 | [OpenStreetMap](https://www.openstreetmap.org/) | Hintergrundkarte |
 
 ### Preisverlauf (Chart)
-Seit März 2026 werden täglich echte TCS-Kantonspreise in `data/price-history.json` akkumuliert. Der Chart zeigt:
-- **Echte Daten** (durchgezogene Linie): Tage mit einem TCS-Scraper-Eintrag
-- **Geschätzte Daten** (gestrichelte Linie): Lücken werden mit einer nationalen Trendkurve + kantonstypischem Offset interpoliert
-
-Je mehr Tage gesammelt sind, desto mehr der Kurve basiert auf Echtwerten. Bei ausreichend Daten im gewählten Zeitraum wechselt der Disclaimer auf grün.
+Seit März 2026 werden täglich Kantonspreise in `data/price-history.json` akkumuliert. Der Chart zeigt ausschliesslich diese echten Tageswerte (bei langen Zeiträumen jeder n. Tag). Es gibt keine Schätzkurve mehr.
 
 ### Bibliotheken
 - [Leaflet](https://leafletjs.com/) – interaktive Karte
@@ -104,9 +101,9 @@ npx serve .
 ### Scraper lokal ausführen
 
 ```bash
-pip install playwright aiohttp
-playwright install chromium
-TCS_EMAIL=xxx TCS_PASSWORD=yyy python scripts/scrape.py
+python3 scripts/scrape.py          # keine Abhängigkeiten, keine Zugangsdaten
+python3 -m unittest discover -s tests -p 'test_*.py'
+npm ci && npx playwright test      # E2E-Tests (starten einen lokalen Server auf Port 8099)
 ```
 
 ---
@@ -117,6 +114,4 @@ Settings → Pages → Source: `main` / Root `/`
 
 → https://defendeggu.github.io/fuel-price-map-ch/
 
-**GitHub Secrets** (für den Scraper-Workflow):
-- `TCS_EMAIL` – E-Mail-Adresse des TCS-Accounts
-- `TCS_PASSWORD` – Passwort des TCS-Accounts
+Der Scraper-Workflow braucht keine Secrets.

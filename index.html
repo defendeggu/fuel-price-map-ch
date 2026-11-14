@@ -157,11 +157,10 @@
       box-shadow: 0 4px 24px rgba(0,0,0,.6) !important;
     }
     .leaflet-tooltip::before { display: none !important; }
-    .estimate-badge {
-      font-family: var(--mono); font-size: 9px; color: #f59e0b;
-      background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3);
-      border-radius: 4px; padding: 2px 7px; display: inline-block; margin-top: 8px;
+    .info-badge {
+      font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 8px;
     }
+    #date-chip.stale { color: #f59e0b; border-color: rgba(245,158,11,.5); }
     .chart-btn {
       font-family: var(--head); font-size: 11px; font-weight: 700; letter-spacing:.08em;
       text-transform: uppercase; background: var(--panel); color: var(--muted);
@@ -367,7 +366,7 @@
     <div class="cal-wd">So</div>
   </div>
   <div class="cal-days" id="cal-days"></div>
-  <div class="cal-range-hint" id="cal-range-hint">Daten verfügbar: 03.12.2025 – heute</div>
+  <div class="cal-range-hint" id="cal-range-hint">Lade Verfügbarkeit…</div>
 </div>
 
 <div id="chart-modal" onclick="handleModalClick(event)">
@@ -394,11 +393,11 @@
         <div class="chart-legend-dot" style="background:#38bdf8"></div> Benzin 95
       </div>
       <div class="chart-legend-item" id="legend-estimated" style="display:none">
-        <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#7d8590" stroke-width="1.5" stroke-dasharray="4,3"/></svg> Geschätzt
+        <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#7d8590" stroke-width="1.5" stroke-dasharray="4,3"/></svg> PLZ-Zuordnung (ungenau)
       </div>
     </div>
     <canvas id="price-chart" height="200"></canvas>
-    <div class="chart-estimate" id="chart-estimate">⚠ Verlauf geschätzt · Aktuelle Preise: benzin.tcs.ch</div>
+    <div class="chart-estimate" id="chart-estimate"></div>
   </div>
 </div>
 
@@ -443,32 +442,23 @@ const NAMES = {
 };
 
 /* ── PRICE DATA ──────────────────────────────────────────────────
-   Kantonsweise Richtwerte inkl. MwSt., Ø März 2026.
-   Quellen: TCS Benzinpreis-Radar (Ø kantonal), BFS Konsumentenpreisindex.
-   Regionale Faktoren: Grenzkantone & Tankstellendichte → tendenziell günstiger.
-   Bergkantone (UR, GR, GL, AI) → tendenziell teurer.
-   Für tagesaktuelle Einzelpreise: benzin.tcs.ch
+   Keine eingebauten Preise: alles kommt aus data/canton-prices.json (aktueller Stand)
+   und data/price-history.json (Tagesverlauf). Fehlt die Datei, zeigt die Seite einen Fehler.
 ──────────────────────────────────────────────────────────────── */
-const PRICES = {
-  diesel: {
-    BL:1.754, AG:1.758, SH:1.762, SO:1.763, BS:1.765,
-    GE:1.762, TI:1.764, TG:1.768, VS:1.769, VD:1.773,
-    NE:1.776, JU:1.778, BE:1.777, LU:1.779, FR:1.780,
-    ZH:1.780, SG:1.783, ZG:1.784, SZ:1.786, AR:1.785,
-    NW:1.789, OW:1.792, AI:1.794, GL:1.796, GR:1.799, UR:1.803
-  },
-  benzin: {
-    BL:1.688, AG:1.692, SH:1.695, SO:1.696, BS:1.697,
-    GE:1.694, TI:1.696, TG:1.700, VS:1.702, VD:1.706,
-    NE:1.708, JU:1.710, BE:1.708, LU:1.711, FR:1.710,
-    ZH:1.712, SG:1.714, ZG:1.717, SZ:1.719, AR:1.717,
-    NW:1.722, OW:1.725, AI:1.727, GL:1.729, GR:1.732, UR:1.736
-  }
-};
+const PRICES = { diesel: {}, benzin: {} };   // aktueller Stand (live)
+let liveMeta   = {};     // {kz: {n_diesel, n_benzin}} – Stationszahl pro Kanton (nur aktueller Stand)
+let latestKey  = null;   // Datum des aktuellen Stands, 'YYYY-MM-DD' (UTC-Datum des Scrapers)
+
+/* ── DATUMS-HELFER ───────────────────────────────────────────── */
+function dateKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function parseKey(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function fmtDate(d, opts) { return d.toLocaleDateString('de-CH', opts || {day:'2-digit',month:'2-digit',year:'numeric'}); }
 
 let fuel = 'diesel';
 // displayPrices is the working copy, updated when date changes
-let displayPrices = { diesel: {...PRICES.diesel}, benzin: {...PRICES.benzin} };
+let displayPrices = { diesel: {}, benzin: {} };
 function prices() { return displayPrices[fuel]; }
 function otherFuel() { return fuel === 'diesel' ? 'benzin' : 'diesel'; }
 function fuelLabel(f) { return f === 'diesel' ? 'Diesel' : 'Benzin 95'; }
@@ -601,7 +591,8 @@ function showDetail(k, name) {
   const rank = sorted.findIndex(([key])=>key===k)+1;
   const color = getColor(price);
   const badge = rank <= 5 ? '✅ günstig' : rank >= sorted.length-4 ? '🔴 teuer' : '🟡 Mittelfeld';
-  const other = PRICES[otherFuel()][k];
+  const other = displayPrices[otherFuel()][k];
+  const n = (selectedIsLatest && liveMeta[k]) ? liveMeta[k]['n_' + fuel] : null;
   document.getElementById('detail-block').innerHTML = `
     <div class="s-label">Ausgewählter Kanton</div>
     <div id="detail-name">${name}</div>
@@ -611,7 +602,7 @@ function showDetail(k, name) {
          <div id="detail-unit">CHF / Liter ${fuelLabel(fuel)}</div>
          <div id="detail-rank">Rang ${rank} / ${sorted.length} &nbsp;·&nbsp; ${badge}</div>
          <div id="detail-other">${fuelLabel(otherFuel())}: ${other ? other.toFixed(3)+' CHF/L' : 'k.A.'}</div>
-         <div class="estimate-badge">⚠ Kantonsschätzung</div>
+         ${n ? `<div class="info-badge">Median aus ${n} Stationen</div>` : ''}
          <button class="chart-btn" onclick="openChart('${k}','${name.replace(/'/g,"\\'")}')">Preisverlauf →</button>`
       : `<div style="color:var(--muted);font-size:13px;margin-top:12px;font-style:italic">Kein Preis verfügbar</div>`
     }`;
@@ -621,6 +612,7 @@ function showDetail(k, name) {
 /* ── LEGEND ───────────────────────────────────────────────────── */
 function updateLegend() {
   const vals = Object.values(prices()).filter(v=>!isNaN(v));
+  if (!vals.length) return;
   pMin = Math.min(...vals); pMax = Math.max(...vals);
   document.getElementById('l-min').textContent = pMin.toFixed(3);
   document.getElementById('l-mid').textContent = ((pMin+pMax)/2).toFixed(3);
@@ -675,101 +667,46 @@ function setFuel(f) {
   }
 }
 
-/* ── PRICE HISTORY (Schätz-Baseline) ─────────────────────────── */
-// 14 wöchentliche Datenpunkte: Dez 2025 → heute als Schätz-Trend
-const NAT_TREND = {
-  diesel: [1.820,1.818,1.815,1.808,1.805,1.804,1.801,1.799,1.797,1.794,1.791,1.788,1.784,1.780],
-  benzin: [1.748,1.745,1.743,1.737,1.734,1.732,1.729,1.726,1.724,1.721,1.718,1.715,1.712,1.711],
-};
-const TREND_START = new Date(2025, 11, 3); // Dec 3, 2025
-const NAT_TODAY   = { diesel: 1.780, benzin: 1.711 };
-
-// Deterministisches Rauschen pro Kanton/Woche
-function seededNoise(k, seed, fuelType) {
-  const a = (k.charCodeAt(0)||0)*1000 + (k.charCodeAt(1)||0)*37 + seed*17 + (fuelType==='diesel'?0:500);
-  return (((a*1664525+1013904223)&0x7fffffff)/0x7fffffff)*0.006-0.003;
-}
-
-// Geschätzter Preis für beliebiges Datum via Interpolation im NAT_TREND
-function estimatedPrice(canton, date, fuelType) {
-  const weekMs  = 7*24*3600*1000;
-  const weekPos = Math.max(0, Math.min(13, (date - TREND_START) / weekMs));
-  const i       = Math.min(12, Math.floor(weekPos));
-  const frac    = weekPos - i;
-  const offset  = (PRICES[fuelType][canton] || NAT_TODAY[fuelType]) - NAT_TODAY[fuelType];
-  const v0 = NAT_TREND[fuelType][i]   + offset + seededNoise(canton, i,   fuelType);
-  const v1 = NAT_TREND[fuelType][i+1] + offset + seededNoise(canton, i+1, fuelType);
-  return Math.round((v0*(1-frac) + v1*frac)*1000)/1000;
-}
-
-/* ── LIVE PRICE HISTORY ───────────────────────────────────────── */
-let priceHistory   = null; // geladen aus data/price-history.json
+/* ── PRICE HISTORY ────────────────────────────────────────────── */
+let priceHistory = null;            // geladen aus data/price-history.json
+let historyByDate = new Map();      // 'YYYY-MM-DD' → Eintrag
 
 async function loadPriceHistory() {
   try {
     const res = await fetch('./data/price-history.json');
     if (!res.ok) return;
     priceHistory = await res.json();
+    historyByDate = new Map((priceHistory.entries || []).map(e => [e.date, e]));
     console.log('price-history.json geladen:', priceHistory.entries?.length, 'Einträge');
   } catch(e) {
     console.warn('price-history.json nicht verfügbar:', e.message);
   }
 }
 
-// Sucht den nächsten echten Eintrag zu einem Datum (max. maxDaysDist Tage Abstand)
-function closestRealEntry(date, maxDaysDist=4) {
-  if (!priceHistory?.entries?.length) return null;
-  const targetMs = date.getTime();
-  let best = null, bestDist = Infinity;
-  for (const e of priceHistory.entries) {
-    const dist = Math.abs(new Date(e.date).getTime() - targetMs);
-    if (dist < bestDist) { bestDist = dist; best = e; }
-  }
-  return bestDist <= maxDaysDist*86400000 ? best : null;
+// Ab diesem Datum ordnet der Scraper Stationen per Koordinate dem Kanton zu (davor: PLZ, ungenau).
+function firstGeoDate() {
+  return (priceHistory?.entries || []).find(e => e.geo)?.date || null;
 }
 
-// Gibt Array von {date, label, diesel, benzin, isReal} für den gewählten Zeitraum zurück
+// Echte Tageswerte im gewählten Zeitraum, auf höchstens ~90 Punkte ausgedünnt.
 function getHistoryPoints(canton, rangeMonths) {
-  const endDate   = new Date(TODAY);
-  const startDate = new Date(TODAY);
-  startDate.setMonth(startDate.getMonth() - rangeMonths);
-
-  // Auflösung: ~13–15 Datenpunkte pro Zeitraum
-  const totalDays = rangeMonths * 30;
-  const step      = totalDays <= 30 ? 2 : totalDays <= 60 ? 4 : totalDays <= 90 ? 7 : totalDays <= 180 ? 14 : 28;
-
-  const points = [];
-  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + step)) {
-    const snap  = new Date(d);
-    const entry = closestRealEntry(snap, Math.floor(step/2));
-    const label = snap.toLocaleDateString('de-CH', {day:'2-digit', month:'2-digit',
-                    year: rangeMonths > 6 ? '2-digit' : undefined});
-    if (entry?.cantons?.[canton] && entry.source !== 'estimated') {
-      points.push({ date: snap, label, diesel: entry.cantons[canton].diesel,
-                    benzin: entry.cantons[canton].benzin, isReal: true });
-    } else if (entry?.cantons?.[canton] && entry.source === 'estimated') {
-      points.push({ date: snap, label, diesel: entry.cantons[canton].diesel,
-                    benzin: entry.cantons[canton].benzin, isReal: false });
-    } else {
-      points.push({ date: snap, label,
-                    diesel: estimatedPrice(canton, snap, 'diesel'),
-                    benzin: estimatedPrice(canton, snap, 'benzin'), isReal: false });
-    }
-  }
-  // Letzten Punkt immer auf den aktuellsten echten TCS-Eintrag setzen (bis 30 Tage zurück)
-  if (points.length && priceHistory?.entries?.length) {
-    const tcsEntries = [...priceHistory.entries]
-      .filter(e => e.source !== 'estimated' && e.cantons?.[canton])
-      .sort((a, b) => b.date.localeCompare(a.date));
-    const lastTcs = tcsEntries[0];
-    if (lastTcs) {
-      const last = points[points.length - 1];
-      last.diesel = lastTcs.cantons[canton].diesel;
-      last.benzin = lastTcs.cantons[canton].benzin;
-      last.isReal = true;
-    }
-  }
-  return points;
+  const entries = priceHistory?.entries || [];
+  const endKey  = latestKey || entries[entries.length - 1]?.date;
+  if (!endKey) return [];
+  const end = parseKey(endKey), start = new Date(end);
+  start.setMonth(start.getMonth() - rangeMonths);
+  const inRange = entries.filter(e => e.cantons?.[canton] && parseKey(e.date) >= start && parseKey(e.date) <= end);
+  const step = Math.max(1, Math.ceil(inRange.length / 90));
+  return inRange
+    .filter((e, i) => (inRange.length - 1 - i) % step === 0)
+    .map(e => ({
+      date: e.date,
+      label: fmtDate(parseKey(e.date), {day:'2-digit', month:'2-digit', year: rangeMonths > 6 ? '2-digit' : undefined}),
+      diesel: e.cantons[canton].diesel,
+      benzin: e.cantons[canton].benzin,
+      preGeo: !e.geo,
+      step,
+    }));
 }
 
 /* ── CHART MODAL ──────────────────────────────────────────────── */
@@ -779,57 +716,45 @@ let chartCantonName    = '';
 let chartRangeMonths   = 3;
 
 function buildDataset(points, fuelType, color, bgColor) {
-  const data   = points.map(p => p[fuelType]);
-  const isReal = points.map(p => p.isReal);
-  const n      = points.length;
+  const n = points.length;
+  const dashed = ctx => (points[ctx.p0DataIndex].preGeo || points[ctx.p1DataIndex].preGeo);
   return {
     label: fuelType === 'diesel' ? 'Diesel' : 'Benzin 95',
-    data,
+    data: points.map(p => p[fuelType]),
     borderColor: color,
     backgroundColor: bgColor,
     borderWidth: 2,
-    tension: 0.35,
+    tension: 0.25,
     fill: true,
-    pointRadius: points.map((_, i) => i === n-1 ? 6 : 3),
+    pointRadius: points.map((_, i) => i === n-1 ? 6 : (n > 40 ? 0 : 3)),
+    pointHoverRadius: 5,
     pointBackgroundColor: points.map((p, i) => i === n-1 ? color : 'transparent'),
     pointBorderColor: color,
-    // Gestrichelt wo geschätzt
-    segment: {
-      borderDash: ctx => (!isReal[ctx.p0DataIndex] || !isReal[ctx.p1DataIndex]) ? [5,4] : [],
-      borderColor: ctx => (!isReal[ctx.p0DataIndex] || !isReal[ctx.p1DataIndex])
-        ? color.replace(')', ',0.45)').replace('rgb','rgba') : color,
-    },
+    // gestrichelt, wo die Kantonszuordnung noch per PLZ erfolgte
+    segment: { borderDash: ctx => dashed(ctx) ? [5,4] : [] },
   };
 }
 
 function renderChart(canton, rangeMonths) {
   const points = getHistoryPoints(canton, rangeMonths);
-  const hasAnyReal      = points.some(p => p.isReal);
-  const hasAnyEstimated = points.some(p => !p.isReal);
-  const allReal         = hasAnyReal && !hasAnyEstimated;
+  const hasPreGeo = points.some(p => p.preGeo);
+  const step = points[0]?.step || 1;
 
-  // Subtitle
-  const stepLabel = rangeMonths <= 1 ? '2-Tages-Ø' : rangeMonths <= 2 ? '4-Tages-Ø'
-    : rangeMonths <= 3 ? 'Wochenø' : rangeMonths <= 6 ? '2-Wochen-Ø' : 'Monatsø';
   document.getElementById('chart-sub').textContent =
-    `Preisverlauf · ${rangeMonths} Monat${rangeMonths>1?'e':''} · ${stepLabel} · CHF/L`;
+    `Preisverlauf · ${rangeMonths} Monat${rangeMonths>1?'e':''} · ${step === 1 ? 'Tageswerte' : 'jeder ' + step + '. Tag'} · CHF/L (Median)`;
 
-  // Disclaimer
   const est = document.getElementById('chart-estimate');
-  if (allReal) {
-    est.textContent = '✓ Echte TCS-Stationsdaten (benzin.tcs.ch)';
-    est.style.color = '#22c55e';
-  } else if (!hasAnyReal) {
-    est.textContent = '⚠ Verlauf geschätzt (noch keine historischen TCS-Daten für diesen Zeitraum)';
+  if (!points.length) {
+    est.textContent = '⚠ Keine Verlaufsdaten für diesen Zeitraum';
+    est.style.color = '#f59e0b';
+  } else if (hasPreGeo) {
+    est.textContent = `⚠ Vor dem ${fmtDate(parseKey(firstGeoDate()))} wurden Stationen per PLZ dem Kanton zugeordnet (ungenau, z. B. Genf)`;
     est.style.color = '#f59e0b';
   } else {
-    const realCount = points.filter(p=>p.isReal).length;
-    est.textContent = `⚠ Teils geschätzt – ${realCount}/${points.length} Datenpunkte: benzin.tcs.ch`;
-    est.style.color = '#f59e0b';
+    est.textContent = '✓ Echte Stationsdaten (benzin.tcs.ch), Median pro Kanton';
+    est.style.color = '#22c55e';
   }
-
-  // Legende "Geschätzt" ein-/ausblenden
-  document.getElementById('legend-estimated').style.display = hasAnyEstimated ? '' : 'none';
+  document.getElementById('legend-estimated').style.display = hasPreGeo ? '' : 'none';
 
   if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
 
@@ -857,17 +782,17 @@ function renderChart(canton, rangeMonths) {
             label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)} CHF/L`,
             afterBody: (items) => {
               const idx = items[0]?.dataIndex;
-              return (idx != null && !points[idx].isReal) ? ['  ↳ geschätzt'] : [];
+              return (idx != null && points[idx].preGeo) ? ['  ↳ PLZ-Zuordnung (ungenau)'] : [];
             },
           },
         },
       },
       scales: {
         x: { grid: { color: '#27323f' },
-             ticks: { color: '#7d8590', font: { family: "'DM Mono', monospace", size: 10 }, maxRotation: 0 } },
+             ticks: { color: '#7d8590', font: { family: "'DM Mono', monospace", size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
         y: { grid: { color: '#27323f' },
              ticks: { color: '#7d8590', font: { family: "'DM Mono', monospace", size: 10 },
-                      callback: v => v.toFixed(3) } },
+                      callback: v => v.toFixed(2) } },
       },
     },
   });
@@ -902,14 +827,30 @@ function handleModalClick(e) {
 function onEsc(e) { if (e.key === 'Escape') closeChart(); }
 
 /* ── DATE PICKER ──────────────────────────────────────────────── */
-const DATA_START  = new Date(2025, 11, 3);   // Dec 3, 2025
 const TODAY       = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
-let   DATA_END    = new Date(TODAY);
+let   DATA_START  = null;   // frühester Tag mit Daten (nach dem Laden gesetzt)
+let   DATA_END    = null;   // spätester Tag mit Daten
 
-let selectedDate  = new Date(TODAY);
+let selectedDate     = new Date(TODAY);
+let selectedIsLatest = true;
 let calMonth      = TODAY.getMonth();
 let calYear       = TODAY.getFullYear();
 let calIsOpen     = false;
+
+// Nur Tage mit echtem Eintrag sind wählbar (Lücken im Verlauf bleiben gesperrt).
+function hasData(date) {
+  const k = dateKey(date);
+  return k === latestKey || historyByDate.has(k);
+}
+function initDataRange() {
+  const keys = [...historyByDate.keys(), ...(latestKey ? [latestKey] : [])].sort();
+  if (!keys.length) return;
+  DATA_START = parseKey(keys[0]);
+  DATA_END   = parseKey(keys[keys.length - 1]);
+  const days = new Set(keys).size;
+  document.getElementById('cal-range-hint').textContent =
+    `Echtdaten: ${fmtDate(DATA_START)} – ${fmtDate(DATA_END)} · ${days} Tage`;
+}
 
 const MONTHS_DE = ['Januar','Februar','März','April','Mai','Juni',
                    'Juli','August','September','Oktober','November','Dezember'];
@@ -958,9 +899,9 @@ function renderCalendar() {
   document.getElementById('cal-month-label').textContent = MONTHS_DE[calMonth] + ' ' + calYear;
 
   // Disable prev/next if already at boundary month
-  const atStart = calYear < DATA_START.getFullYear() ||
+  const atStart = !DATA_START || calYear < DATA_START.getFullYear() ||
     (calYear === DATA_START.getFullYear() && calMonth <= DATA_START.getMonth());
-  const atEnd = calYear > DATA_END.getFullYear() ||
+  const atEnd = !DATA_END || calYear > DATA_END.getFullYear() ||
     (calYear === DATA_END.getFullYear() && calMonth >= DATA_END.getMonth());
   document.getElementById('cal-prev').disabled = atStart;
   document.getElementById('cal-next').disabled = atEnd;
@@ -974,7 +915,7 @@ function renderCalendar() {
 
   for (let d = 1; d <= daysInMo; d++) {
     const date = new Date(calYear, calMonth, d);
-    const inRange   = date >= DATA_START && date <= DATA_END;
+    const inRange   = hasData(date);
     const isToday   = date.getTime() === TODAY.getTime();
     const isSel     = date.getDate()  === selectedDate.getDate() &&
                       date.getMonth() === selectedDate.getMonth() &&
@@ -995,20 +936,24 @@ function renderCalendar() {
 function onSelectDate(date) {
   selectedDate = date;
   closeCalendar();
-  setDate();
   updatePricesForDate(date);
+  setDate();
   renderCalendar(); // refresh to show new selection
 }
 
-/* ── PRICE INTERPOLATION ──────────────────────────────────────── */
-function priceForDate(k, date, fuelType) {
-  return estimatedPrice(k, date, fuelType);
-}
-
+/* ── PREISE FÜR GEWÄHLTES DATUM ───────────────────────────────── */
+// Setzt displayPrices auf den Stand des Tages: aktueller Tag = Live-Daten, sonst Eintrag aus der Historie.
 function updatePricesForDate(date) {
-  for (const k of Object.keys(PRICES.diesel)) {
-    displayPrices.diesel[k] = priceForDate(k, date, 'diesel');
-    displayPrices.benzin[k] = priceForDate(k, date, 'benzin');
+  const key = dateKey(date);
+  selectedIsLatest = (key === latestKey);
+  for (const f of ['diesel', 'benzin']) {
+    displayPrices[f] = {};
+    if (selectedIsLatest) {
+      Object.assign(displayPrices[f], PRICES[f]);
+    } else {
+      const cantons = historyByDate.get(key)?.cantons || {};
+      for (const [k, v] of Object.entries(cantons)) if (v[f] != null) displayPrices[f][k] = v[f];
+    }
   }
   updateLegend();
   if (geoLayer) {
@@ -1038,8 +983,12 @@ function openAside() {
 /* ── HELPERS ──────────────────────────────────────────────────── */
 function ovMsg(t) { document.getElementById('ov-msg').textContent = t; }
 function setDate() {
-  document.getElementById('date-chip').textContent =
-    'Stand: ' + selectedDate.toLocaleDateString('de-CH',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const chip = document.getElementById('date-chip');
+  const ageDays = latestKey ? Math.round((TODAY - parseKey(latestKey)) / 86400000) : 0;
+  const stale = selectedIsLatest && ageDays > 2;   // Scraper hat seit > 2 Tagen nichts geliefert
+  chip.textContent = 'Stand: ' + fmtDate(selectedDate) + (stale ? ' ⚠' : '');
+  chip.classList.toggle('stale', stale);
+  chip.title = stale ? `Letzte Daten sind ${ageDays} Tage alt` : '';
 }
 function toast(msg, ms=8000) {
   const el = document.getElementById('toast');
@@ -1049,46 +998,29 @@ function toast(msg, ms=8000) {
 
 /* ── LIVE PREISE LADEN ────────────────────────────────────────── */
 async function loadLivePrices() {
-  try {
-    const res = await fetch('./data/canton-prices.json');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+  const res = await fetch('./data/canton-prices.json');
+  if (!res.ok) throw new Error('Preisdaten nicht ladbar (HTTP ' + res.status + ')');
+  const data = await res.json();
+  if (!data.cantons || !Object.keys(data.cantons).length) throw new Error('Preisdaten leer');
 
-    for (const k of Object.keys(PRICES.diesel)) {
-      if (data.cantons[k]) {
-        PRICES.diesel[k]        = data.cantons[k].diesel;
-        PRICES.benzin[k]        = data.cantons[k].benzin;
-        displayPrices.diesel[k] = data.cantons[k].diesel;
-        displayPrices.benzin[k] = data.cantons[k].benzin;
-      }
-    }
-    if (data.national) {
-      NAT_TODAY.diesel = data.national.diesel;
-      NAT_TODAY.benzin = data.national.benzin;
-    }
-
-    const dateStr = new Date(data.updated).toLocaleDateString('de-CH',
-      { day:'2-digit', month:'2-digit', year:'numeric' });
-    const isTCS = (data.source || '').toLowerCase().includes('tcs');
-    const priceSource = isTCS
-      ? `Preise: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a> (Stationsdurchschnitt pro Kanton) &nbsp;·&nbsp; Stand ${dateStr}`
-      : `Preise: <a href="https://www.globalpetrolprices.com/Switzerland/" target="_blank">GlobalPetrolPrices.com</a> + BFS Kantonsoffsets &nbsp;·&nbsp; Stand ${dateStr}`;
-    document.getElementById('source-bar').innerHTML =
-      `Kantonsgrenzen: <a href="https://swisstopo.admin.ch" target="_blank">swisstopo</a> &nbsp;·&nbsp; ${priceSource}<br>`
-      + `Einzelpreise & Tankstellen: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a>`;
-
-    const hint = document.querySelector('.cal-range-hint');
-    if (hint) hint.textContent = `Echtdaten ab ${dateStr} · ältere Werte geschätzt`;
-    const est = document.getElementById('chart-estimate');
-    if (est) est.textContent = isTCS
-      ? `⚠ Verlauf geschätzt · Aktueller Preis: benzin.tcs.ch (${dateStr})`
-      : `⚠ Verlauf & Preise geschätzt · Einzelpreise: benzin.tcs.ch`;
-
-    console.log('Live-Preise geladen:', data.updated,
-      '| Diesel:', data.national?.diesel, '| Benzin:', data.national?.benzin);
-  } catch(e) {
-    console.warn('canton-prices.json nicht ladbar, nutze Schätzwerte:', e.message);
+  for (const [k, v] of Object.entries(data.cantons)) {
+    PRICES.diesel[k] = v.diesel;
+    PRICES.benzin[k] = v.benzin;
+    liveMeta[k] = { n_diesel: v.n_diesel, n_benzin: v.n_benzin };
   }
+  displayPrices = { diesel: {...PRICES.diesel}, benzin: {...PRICES.benzin} };
+
+  latestKey    = String(data.updated).slice(0, 10);
+  selectedDate = parseKey(latestKey);   // «Stand» zeigt den Datenstand, nicht das heutige Datum
+  selectedIsLatest = true;
+
+  const dateStr = fmtDate(selectedDate);
+  document.getElementById('source-bar').innerHTML =
+    `Kantonsgrenzen: <a href="https://swisstopo.admin.ch" target="_blank" rel="noopener noreferrer">swisstopo</a> &nbsp;·&nbsp; `
+    + `Preise: <a href="https://benzin.tcs.ch" target="_blank" rel="noopener noreferrer">benzin.tcs.ch</a> (Median der Stationspreise pro Kanton) &nbsp;·&nbsp; Stand ${dateStr}<br>`
+    + `Einzelpreise &amp; Tankstellen: <a href="https://benzin.tcs.ch" target="_blank" rel="noopener noreferrer">benzin.tcs.ch</a>`;
+
+  console.log('Live-Preise geladen:', data.updated, '| Diesel:', data.national?.diesel, '| Benzin:', data.national?.benzin);
 }
 
 /* ── BOOT ─────────────────────────────────────────────────────── */
@@ -1100,6 +1032,7 @@ async function loadLivePrices() {
     ]);
     geoData = geo;
     ovMsg('Karte wird gerendert…');
+    initDataRange();
     updateLegend();
     buildLayer(geoData);
     renderList(); setDate();

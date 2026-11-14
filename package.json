@@ -1,7 +1,7 @@
 {
   "name": "dieselkarte",
   "version": "1.0.0",
-  "description": "Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel und Benzin 95 – inkl. historischer Preisentwicklung, Zeitreise-Funktion und wöchentlich aktualisierten Livedaten.",
+  "description": "Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel und Benzin 95 – inkl. historischer Preisentwicklung, Zeitreise-Funktion und täglich aktualisierten Livedaten.",
   "main": "index.js",
   "scripts": {},
   "keywords": [],
