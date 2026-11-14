@@ -7,7 +7,7 @@ on:
 jobs:
   test:
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright 1.58 unterstützt Ubuntu 26.04 (ubuntu-latest) noch nicht
     steps:
     - uses: actions/checkout@v7
     - uses: actions/setup-node@v7
