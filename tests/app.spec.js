@@ -26,6 +26,16 @@ test('zeigt Datenstand und alle 26 Kantone aus den JSON-Daten', async ({ page })
   await expect(page.locator('#canton-list .c-row .c-price').first()).toHaveText(cheapest.toFixed(3));
 });
 
+test('Kantonsgrenzen kommen aus dem Repo, nicht von fremden Servern', async ({ page }) => {
+  const geoRequests = [];
+  page.on('request', r => { if (/cantons|geojson/i.test(r.url())) geoRequests.push(r.url()); });
+  await page.reload();
+  await expect(page.locator('#overlay')).toHaveClass(/hidden/, { timeout: 20_000 });
+  await expect(page.locator('path.leaflet-interactive')).toHaveCount(26);
+  expect(geoRequests.length).toBeGreaterThan(0);
+  for (const url of geoRequests) expect(new URL(url).pathname).toBe('/data/cantons.topo.json');
+});
+
 test('Genf hat eigene Stationsdaten (Detailansicht)', async ({ page }) => {
   await openSidebar(page);
   await page.locator('#canton-list .c-row', { hasText: 'Genf' }).click();
