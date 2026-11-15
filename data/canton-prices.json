@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-14T13:31:52Z",
+  "updated": "2026-11-15T03:55:21Z",
   "national": {
     "diesel": 2.32,
     "benzin": 1.94
@@ -19,8 +19,8 @@
       "n_benzin": 534
     },
     "LU": {
-      "diesel": 2.325,
-      "benzin": 1.96,
+      "diesel": 2.33,
+      "benzin": 1.945,
       "n_diesel": 206,
       "n_benzin": 204
     },
@@ -43,14 +43,14 @@
       "n_benzin": 19
     },
     "NW": {
-      "diesel": 2.32,
-      "benzin": 1.95,
+      "diesel": 2.335,
+      "benzin": 1.98,
       "n_diesel": 14,
       "n_benzin": 14
     },
     "GL": {
       "diesel": 2.32,
-      "benzin": 1.97,
+      "benzin": 1.94,
       "n_diesel": 29,
       "n_benzin": 29
     },
@@ -79,7 +79,7 @@
       "n_benzin": 38
     },
     "BL": {
-      "diesel": 2.3,
+      "diesel": 2.29,
       "benzin": 1.94,
       "n_diesel": 104,
       "n_benzin": 104
@@ -157,7 +157,7 @@
       "n_benzin": 89
     },
     "JU": {
-      "diesel": 2.32,
+      "diesel": 2.31,
       "benzin": 1.89,
       "n_diesel": 61,
       "n_benzin": 61
