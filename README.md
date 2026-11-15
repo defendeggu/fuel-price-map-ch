@@ -15,7 +15,9 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 
 ### Sidebar
 - Aktueller Preis, Rang unter allen Kantonen, Vergleichspreis der anderen Kraftstoffsorte
-- Scrollbare Rangliste aller 26 Kantone, sortiert nach Preis
+- Veränderung gegenüber Vortag und Vorwoche in Rappen (nur zwischen Tagen mit derselben Berechnungsmethode)
+- Spanne günstigste–teuerste Station im Kanton (aktueller Stand)
+- Scrollbare Rangliste aller 26 Kantone, sortiert nach Preis, mit Veränderung zum Vortag
 
 ### Kraftstoffwahl
 - Toggle oben rechts: **Diesel** / **Benzin 95**
@@ -25,6 +27,7 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 - Im Detailbereich: «Preisverlauf →» anklicken
 - Modal mit Linienchart: Diesel (orange) und Benzin 95 (blau)
 - Zeitraum wählbar: **1M / 2M / 3M / 6M / 12M**
+- **Vergleich mit** einem anderen Kanton oder dem CH-Wert (Median der Kantone) für die gewählte Sorte
 - Nur echte Tageswerte; gestrichelt = ältere Werte mit PLZ-Zuordnung (ungenau)
 - Interaktiver Tooltip beim Hovern
 - Schliessen: ✕, Klick ausserhalb oder ESC
@@ -33,6 +36,15 @@ Interaktive Schweizerkarte mit kantonsweisen Durchschnittspreisen für Diesel un
 - Datumsfeld oben rechts («Stand: …») anklicken
 - Kalender mit verfügbaren Tagen
 - Nur Tage mit Daten sind wählbar → Karte, Rangliste und Detailansicht zeigen die echten Preise dieses Tages
+
+### Deeplinks
+- Die Adresse hält Kanton, Sorte und Datum fest, z. B. `#GE/benzin/2026-11-01` (alle Teile optional, ohne Datum = aktueller Stand)
+- Links lassen sich teilen; Zurück/Vor im Browser und manuelle Änderungen am `#…` werden übernommen
+
+### Bedienung per Tastatur
+- Sortenwahl, Datum, Kalendertage, Rangliste und Chart sind Buttons und per Tab erreichbar
+- Rangliste: Enter wählt den Kanton und zoomt die Karte hin
+- Chart und Kalender: Escape schliesst, der Fokus springt zurück; im Chart bleibt der Fokus im Dialog
 
 ### Responsives Design
 - Vollständig bedienbar auf Handy und Tablet
@@ -53,6 +65,8 @@ Täglich um **01:00 Uhr CET** läuft ein GitHub Actions Workflow:
 5. Plausibilitätsprüfung: alle 26 Kantone belegt, genug Stationen, kein Sprung > 15 % zum letzten Stand. Sonst endet der Lauf mit Fehler (Workflow rot, Mail von GitHub) und es wird **nichts** committet. Es gibt keine geschätzten oder erfundenen Werte
 6. `data/canton-prices.json` (aktueller Stand) und `data/price-history.json` (Tagesverlauf, max. 400 Tage) werden committet
 
+`canton-prices.json` enthält pro Kanton `diesel`/`benzin` (Kantonswert), `n_*` (Stationszahl) und `min_*`/`max_*` (günstigste/teuerste Station). Verlaufseinträge tragen `method` (aktuell `trim10`); das Frontend vergleicht nur Tage mit gleicher Methode.
+
 ```
 .github/workflows/scrape.yml   ← Cron-Job (täglich 01:00 CET)
 scripts/scrape.py              ← Abruf, Aggregation, Plausibilitätsprüfung
@@ -63,7 +77,12 @@ data/canton-prices.json        ← Aktuelle Preise inkl. Stationszahl
 data/price-history.json        ← Verlauf pro Kanton (täglich akkumuliert)
 tests/test_scrape.py           ← Unit-Tests (unittest)
 tests/app.spec.js              ← E2E-Tests der Karte (Playwright)
+index.html                     ← nur Markup und Content-Security-Policy
+css/app.css, js/app.js         ← Styles und Logik (kein Inline-Skript, keine onclick-Attribute)
+.github/dependabot.yml         ← wöchentliche Updates für Actions (auf SHA gepinnt) und npm
 ```
+
+**Sicherheit:** Die Seite setzt eine strenge Content-Security-Policy (`script-src 'self'`, keine Fremd-Hosts ausser den OSM-Kacheln). Inhalte werden per DOM aufgebaut, nicht per `innerHTML`; ein E2E-Test schlägt bei CSP-Verstössen und Anfragen an fremde Server an.
 
 **Hinweis zur Historie:** Einträge bis 13.11.2026 ordneten Stationen noch per PLZ-Tabelle den Kantonen zu (ungenau, Genf hatte keine eigenen Daten). Im Chart sind sie gestrichelt markiert. Ab `geo: true` gilt die Koordinaten-Zuordnung.
 
@@ -93,7 +112,7 @@ Zum Aktualisieren: neue Version mit `npm pack <paket>@<version>` holen, die Date
 
 ## Lokale Entwicklung
 
-Einzel-Datei-App, kein Build-Step nötig. Wegen CORS muss ein lokaler Webserver verwendet werden:
+Statische Seite ohne Build-Step. Wegen CORS muss ein lokaler Webserver verwendet werden:
 
 ```bash
 python -m http.server 8080
