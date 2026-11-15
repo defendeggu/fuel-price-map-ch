@@ -39,6 +39,9 @@ SOURCE_LABEL = "benzin.tcs.ch (Cloud Function, getrimmter Mittelwert der Station
 OUTLIER_FACTOR = 0.4       # Preise > ±40 % vom Landesmedian gelten als Fehleingabe
 MIN_STATIONS_TOTAL = 2000  # darunter ist der Abruf unplausibel
 MIN_STATIONS_PER_CANTON = 3
+# Kennung der Berechnungsmethode im Verlauf. Das Frontend vergleicht Tage nur, wenn beide
+# Einträge dieselbe Methode haben (sonst entstehen Scheinveränderungen).
+METHOD = "trim10"
 # Kantonswert = Mittelwert ohne die günstigsten und teuersten 10 % der Stationen.
 # Kein Median: viele Stationen verlangen denselben "Listenpreis" (z. B. 2.32), der Median
 # landet dann in fast allen Kantonen exakt darauf und die Unterschiede verschwinden.
@@ -78,10 +81,11 @@ def trimmed_mean(values: list[float], fraction: float = TRIM_FRACTION) -> float:
     return statistics.mean(v[k:len(v) - k])
 
 
-def aggregate(stations: list[dict], locator: CantonLocator) -> tuple[dict, dict]:
+def canton_stats(stations: list[dict], locator: CantonLocator) -> dict[str, dict]:
     """
-    Gibt ({kanton: getrimmter_mittelwert}, {kanton: anzahl_stationen}) zurück.
-    Cluster, Stationen ohne Preis, ausserhalb der Schweiz oder mit Ausreisserpreis zählen nicht.
+    Gibt {kanton: {"price", "n", "min", "max"}} zurück: getrimmter Mittelwert, Stationszahl,
+    günstigste und teuerste Station. Cluster, Stationen ohne Preis, ausserhalb der Schweiz
+    oder mit Ausreisserpreis zählen nicht.
     """
     usable = [
         s for s in stations
@@ -89,7 +93,7 @@ def aggregate(stations: list[dict], locator: CantonLocator) -> tuple[dict, dict]
         and not is_excluded(s)
     ]
     if not usable:
-        return {}, {}
+        return {}
     national = statistics.median(s["price"] for s in usable)
     lo, hi = national * (1 - OUTLIER_FACTOR), national * (1 + OUTLIER_FACTOR)
 
@@ -101,10 +105,16 @@ def aggregate(stations: list[dict], locator: CantonLocator) -> tuple[dict, dict]
         if kz:
             by_canton[kz].append(round(s["price"], 3))
 
-    prices = {kz: round(trimmed_mean(v), 3) for kz, v in by_canton.items()
-              if len(v) >= MIN_STATIONS_PER_CANTON}
-    counts = {kz: len(v) for kz, v in by_canton.items() if kz in prices}
-    return prices, counts
+    return {
+        kz: {"price": round(trimmed_mean(v), 3), "n": len(v), "min": min(v), "max": max(v)}
+        for kz, v in by_canton.items() if len(v) >= MIN_STATIONS_PER_CANTON
+    }
+
+
+def aggregate(stations: list[dict], locator: CantonLocator) -> tuple[dict, dict]:
+    """Gibt ({kanton: getrimmter_mittelwert}, {kanton: anzahl_stationen}) zurück."""
+    stats = canton_stats(stations, locator)
+    return {k: v["price"] for k, v in stats.items()}, {k: v["n"] for k, v in stats.items()}
 
 
 def validate(result: dict, previous_national: dict | None) -> list[str]:
@@ -127,7 +137,7 @@ def validate(result: dict, previous_national: dict | None) -> list[str]:
 
 def update_history(history: dict, today: str, cantons: dict, keep: int = 400) -> dict:
     entries = history.setdefault("entries", [])
-    entry = {"date": today, "source": "tcs", "geo": True, "cantons": cantons}
+    entry = {"date": today, "source": "tcs", "geo": True, "method": METHOD, "cantons": cantons}
     for i, e in enumerate(entries):
         if e.get("date") == today:
             entries[i] = entry
@@ -156,9 +166,11 @@ def main() -> int:
         except Exception as e:
             print(f"FEHLER beim Abruf von {api_fuel}: {e}", file=sys.stderr)
             return 1
-        prices, counts = aggregate(stations, locator)
+        stats = canton_stats(stations, locator)
+        prices = {k: v["price"] for k, v in stats.items()}
+        counts = {k: v["n"] for k, v in stats.items()}
         print(f"  {len(stations)} Einträge → {sum(counts.values())} Stationen in {len(prices)} Kantonen")
-        result[fuel] = {"prices": prices, "counts": counts}
+        result[fuel] = {"prices": prices, "counts": counts, "stats": stats}
 
     previous = None
     if out_path.exists():
@@ -180,6 +192,10 @@ def main() -> int:
             "benzin": result["benzin"]["prices"][kz],
             "n_diesel": result["diesel"]["counts"][kz],
             "n_benzin": result["benzin"]["counts"][kz],
+            "min_diesel": result["diesel"]["stats"][kz]["min"],
+            "max_diesel": result["diesel"]["stats"][kz]["max"],
+            "min_benzin": result["benzin"]["stats"][kz]["min"],
+            "max_benzin": result["benzin"]["stats"][kz]["max"],
         }
         for kz in ALL_CANTONS
     }
@@ -190,6 +206,7 @@ def main() -> int:
             fuel: round(statistics.median(result[fuel]["prices"].values()), 3) for fuel in FUELS
         },
         "source": SOURCE_LABEL,
+        "method": METHOD,
         "cantons": cantons,
     }
     out_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))

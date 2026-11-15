@@ -54,6 +54,16 @@ class Aggregation(unittest.TestCase):
         self.assertEqual(prices["ZH"], 2.3)
         self.assertEqual(counts["ZH"], 10)
 
+    def test_min_max_pro_kanton(self):
+        preise = (2.25, 2.30, 2.31, 2.32, 2.39)
+        stats = scrape.canton_stats([st(p, *self.ZH) for p in preise], LOCATOR)
+        self.assertEqual((stats["ZH"]["min"], stats["ZH"]["max"], stats["ZH"]["n"]), (2.25, 2.39, 5))
+
+    def test_min_max_ohne_ausreisser(self):
+        preise = [2.3] * 5 + [4.5, 0.5]
+        stats = scrape.canton_stats([st(p, *self.ZH) for p in preise], LOCATOR)
+        self.assertEqual((stats["ZH"]["min"], stats["ZH"]["max"]), (2.3, 2.3))
+
     def test_kein_kleben_am_haeufigsten_preis(self):
         # Median wäre exakt 2.32 – der Kantonswert soll die teureren Stationen abbilden
         preise = [2.32] * 6 + [2.38, 2.39, 2.40, 2.41]
