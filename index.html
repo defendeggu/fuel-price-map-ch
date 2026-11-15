@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>⛽ TreibstoffKarte CH – Kantone</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <!-- Alle Bibliotheken und Schriften liegen im Repo (vendor/), keine Fremd-CDNs -->
+  <link rel="stylesheet" href="vendor/fonts/fonts.css">
+  <link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css">
+  <script src="vendor/leaflet-1.9.4/leaflet.js"></script>
+  <script src="vendor/topojson-client-3.1.0.min.js"></script>
+  <script src="vendor/chart.js-4.6.1.umd.min.js"></script>
   <style>
     :root {
       --bg:      #0d1117;
@@ -423,9 +423,9 @@
     </div>
     <div id="canton-list"></div>
     <div id="source-bar">
-      Kantonsgrenzen: <a href="https://swisstopo.admin.ch" target="_blank">swisstopo</a> &nbsp;·&nbsp;
-      Preise: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a><br>
-      Einzelpreise &amp; Tankstellen: <a href="https://benzin.tcs.ch" target="_blank">benzin.tcs.ch</a>
+      Kantonsgrenzen: <a href="https://swisstopo.admin.ch" target="_blank" rel="noopener noreferrer">swisstopo</a> &nbsp;·&nbsp;
+      Preise: <a href="https://benzin.tcs.ch" target="_blank" rel="noopener noreferrer">benzin.tcs.ch</a><br>
+      Einzelpreise &amp; Tankstellen: <a href="https://benzin.tcs.ch" target="_blank" rel="noopener noreferrer">benzin.tcs.ch</a>
     </div>
   </aside>
 </main>

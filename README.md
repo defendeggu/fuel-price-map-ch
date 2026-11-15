@@ -58,6 +58,7 @@ Täglich um **01:00 Uhr CET** läuft ein GitHub Actions Workflow:
 scripts/scrape.py              ← Abruf, Aggregation, Plausibilitätsprüfung
 scripts/cantons.py             ← Koordinate → Kanton (nur Standardbibliothek)
 data/cantons.topo.json         ← Kantonsgrenzen (TopoJSON)
+vendor/                        ← Leaflet, topojson-client, Chart.js, Schriften (selbst gehostet)
 data/canton-prices.json        ← Aktuelle Preise inkl. Stationszahl
 data/price-history.json        ← Verlauf pro Kanton (täglich akkumuliert)
 tests/test_scrape.py           ← Unit-Tests (unittest)
@@ -79,10 +80,14 @@ tests/app.spec.js              ← E2E-Tests der Karte (Playwright)
 ### Preisverlauf (Chart)
 Seit März 2026 werden täglich Kantonspreise in `data/price-history.json` akkumuliert. Der Chart zeigt ausschliesslich diese echten Tageswerte (bei langen Zeiträumen jeder n. Tag). Es gibt keine Schätzkurve mehr.
 
-### Bibliotheken
-- [Leaflet](https://leafletjs.com/) – interaktive Karte
-- [topojson-client](https://github.com/topojson/topojson-client) – TopoJSON → GeoJSON
-- [Chart.js](https://www.chartjs.org/) – Preisverlauf-Chart
+### Bibliotheken und Schriften
+Alle liegen im Repo unter `vendor/` (feste Versionen, Lizenzen in `vendor/licenses/`); die Seite lädt nichts von Fremd-CDNs. Einzige externe Quelle sind die OpenStreetMap-Kartenkacheln.
+- [Leaflet](https://leafletjs.com/) 1.9.4 – interaktive Karte
+- [topojson-client](https://github.com/topojson/topojson-client) 3.1.0 – TopoJSON → GeoJSON
+- [Chart.js](https://www.chartjs.org/) 4.6.1 – Preisverlauf-Chart
+- Schriften Barlow Condensed und DM Mono (via [Fontsource](https://fontsource.org/) 5.3.0, SIL Open Font License)
+
+Zum Aktualisieren: neue Version mit `npm pack <paket>@<version>` holen, die Datei unter `vendor/` ersetzen (Versionsnummer im Dateinamen) und den Verweis in `index.html` anpassen.
 
 ---
 

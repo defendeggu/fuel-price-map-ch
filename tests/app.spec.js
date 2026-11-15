@@ -36,6 +36,23 @@ test('Kantonsgrenzen kommen aus dem Repo, nicht von fremden Servern', async ({ p
   for (const url of geoRequests) expect(new URL(url).pathname).toBe('/data/cantons.topo.json');
 });
 
+test('lädt nichts von fremden Servern ausser OSM-Kartenkacheln', async ({ page }) => {
+  const foreign = [];
+  page.on('request', r => {
+    const { hostname } = new URL(r.url());
+    if (!['localhost', '127.0.0.1'].includes(hostname) && !hostname.endsWith('tile.openstreetmap.org')) foreign.push(r.url());
+  });
+  await page.reload();
+  await expect(page.locator('#overlay')).toHaveClass(/hidden/, { timeout: 20_000 });
+  await openSidebar(page);
+  await page.locator('#canton-list .c-row', { hasText: 'Genf' }).click();
+  await page.locator('.chart-btn').click();
+  await expect(page.locator('#chart-modal')).toHaveClass(/open/);
+  await page.evaluate(() => document.fonts.ready);
+  expect(foreign).toEqual([]);
+  expect(await page.evaluate(() => document.fonts.check("12px 'DM Mono'") && document.fonts.check("700 12px 'Barlow Condensed'"))).toBe(true);
+});
+
 test('Genf hat eigene Stationsdaten (Detailansicht)', async ({ page }) => {
   await openSidebar(page);
   await page.locator('#canton-list .c-row', { hasText: 'Genf' }).click();
