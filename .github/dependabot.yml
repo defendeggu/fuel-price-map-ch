@@ -1,0 +1,19 @@
+# Wöchentliche Updates für die auf Commit-SHA gepinnten Actions und die Test-Abhängigkeiten.
+# Nicht abgedeckt: die Dateien unter vendor/ (Leaflet, Chart.js, …) – die werden von Hand
+# aktualisiert, siehe README.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
