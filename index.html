@@ -602,7 +602,7 @@ function showDetail(k, name) {
          <div id="detail-unit">CHF / Liter ${fuelLabel(fuel)}</div>
          <div id="detail-rank">Rang ${rank} / ${sorted.length} &nbsp;·&nbsp; ${badge}</div>
          <div id="detail-other">${fuelLabel(otherFuel())}: ${other ? other.toFixed(3)+' CHF/L' : 'k.A.'}</div>
-         ${n ? `<div class="info-badge">Median aus ${n} Stationen</div>` : ''}
+         ${n ? `<div class="info-badge">Mittelwert aus ${n} Stationen</div>` : ''}
          <button class="chart-btn" onclick="openChart('${k}','${name.replace(/'/g,"\\'")}')">Preisverlauf →</button>`
       : `<div style="color:var(--muted);font-size:13px;margin-top:12px;font-style:italic">Kein Preis verfügbar</div>`
     }`;
@@ -613,10 +613,17 @@ function showDetail(k, name) {
 function updateLegend() {
   const vals = Object.values(prices()).filter(v=>!isNaN(v));
   if (!vals.length) return;
-  pMin = Math.min(...vals); pMax = Math.max(...vals);
-  document.getElementById('l-min').textContent = pMin.toFixed(3);
+  // Skala auf 10.–90. Perzentil begrenzen: ein einzelner Ausreisserkanton (z. B. TI)
+  // soll nicht alle übrigen Kantone in ein schmales Farbband drücken.
+  const sorted = [...vals].sort((a,b)=>a-b);
+  const q = f => { const x = f*(sorted.length-1), i = Math.floor(x);
+                   return sorted[i] + ((sorted[i+1] ?? sorted[i]) - sorted[i]) * (x-i); };
+  pMin = q(0.1); pMax = q(0.9);
+  if (pMax - pMin < 0.005) { pMin = sorted[0]; pMax = sorted[sorted.length-1]; }
+  const clipLo = sorted[0] < pMin - 1e-9, clipHi = sorted[sorted.length-1] > pMax + 1e-9;
+  document.getElementById('l-min').textContent = (clipLo ? '≤ ' : '') + pMin.toFixed(3);
   document.getElementById('l-mid').textContent = ((pMin+pMax)/2).toFixed(3);
-  document.getElementById('l-max').textContent = pMax.toFixed(3);
+  document.getElementById('l-max').textContent = (clipHi ? '≥ ' : '') + pMax.toFixed(3);
 }
 
 /* ── LIST ─────────────────────────────────────────────────────── */
@@ -741,7 +748,7 @@ function renderChart(canton, rangeMonths) {
   const step = points[0]?.step || 1;
 
   document.getElementById('chart-sub').textContent =
-    `Preisverlauf · ${rangeMonths} Monat${rangeMonths>1?'e':''} · ${step === 1 ? 'Tageswerte' : 'jeder ' + step + '. Tag'} · CHF/L (Median)`;
+    `Preisverlauf · ${rangeMonths} Monat${rangeMonths>1?'e':''} · ${step === 1 ? 'Tageswerte' : 'jeder ' + step + '. Tag'} · CHF/L (getrimmter Mittelwert)`;
 
   const est = document.getElementById('chart-estimate');
   if (!points.length) {
@@ -751,7 +758,7 @@ function renderChart(canton, rangeMonths) {
     est.textContent = `⚠ Vor dem ${fmtDate(parseKey(firstGeoDate()))} wurden Stationen per PLZ dem Kanton zugeordnet (ungenau, z. B. Genf)`;
     est.style.color = '#f59e0b';
   } else {
-    est.textContent = '✓ Echte Stationsdaten (benzin.tcs.ch), Median pro Kanton';
+    est.textContent = '✓ Echte Stationsdaten (benzin.tcs.ch), getrimmter Mittelwert pro Kanton';
     est.style.color = '#22c55e';
   }
   document.getElementById('legend-estimated').style.display = hasPreGeo ? '' : 'none';
@@ -1017,7 +1024,7 @@ async function loadLivePrices() {
   const dateStr = fmtDate(selectedDate);
   document.getElementById('source-bar').innerHTML =
     `Kantonsgrenzen: <a href="https://swisstopo.admin.ch" target="_blank" rel="noopener noreferrer">swisstopo</a> &nbsp;·&nbsp; `
-    + `Preise: <a href="https://benzin.tcs.ch" target="_blank" rel="noopener noreferrer">benzin.tcs.ch</a> (Median der Stationspreise pro Kanton) &nbsp;·&nbsp; Stand ${dateStr}<br>`
+    + `Preise: <a href="https://benzin.tcs.ch" target="_blank" rel="noopener noreferrer">benzin.tcs.ch</a> (getrimmter Mittelwert der Stationspreise pro Kanton) &nbsp;·&nbsp; Stand ${dateStr}<br>`
     + `Einzelpreise &amp; Tankstellen: <a href="https://benzin.tcs.ch" target="_blank" rel="noopener noreferrer">benzin.tcs.ch</a>`;
 
   console.log('Live-Preise geladen:', data.updated, '| Diesel:', data.national?.diesel, '| Benzin:', data.national?.benzin);

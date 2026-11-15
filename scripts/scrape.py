@@ -34,11 +34,15 @@ ALL_CANTONS = [
     "ZH", "BE", "LU", "UR", "SZ", "OW", "NW", "GL", "ZG", "FR", "SO", "BS", "BL",
     "SH", "AR", "AI", "SG", "GR", "AG", "TG", "TI", "VD", "VS", "NE", "GE", "JU",
 ]
-SOURCE_LABEL = "benzin.tcs.ch (Cloud Function, Median der Stationspreise pro Kanton)"
+SOURCE_LABEL = "benzin.tcs.ch (Cloud Function, getrimmter Mittelwert der Stationspreise pro Kanton)"
 
 OUTLIER_FACTOR = 0.4       # Preise > ±40 % vom Landesmedian gelten als Fehleingabe
 MIN_STATIONS_TOTAL = 2000  # darunter ist der Abruf unplausibel
 MIN_STATIONS_PER_CANTON = 3
+# Kantonswert = Mittelwert ohne die günstigsten und teuersten 10 % der Stationen.
+# Kein Median: viele Stationen verlangen denselben "Listenpreis" (z. B. 2.32), der Median
+# landet dann in fast allen Kantonen exakt darauf und die Unterschiede verschwinden.
+TRIM_FRACTION = 0.1
 MAX_JUMP_VS_PREVIOUS = 0.15  # Landesmedian darf sich ggü. dem letzten Eintrag um max. 15 % ändern
 
 
@@ -67,9 +71,16 @@ def is_excluded(station: dict) -> bool:
     return bool(re.search(r"\b7563\b", station.get("formattedAddress", "")))
 
 
+def trimmed_mean(values: list[float], fraction: float = TRIM_FRACTION) -> float:
+    """Mittelwert nach Abschneiden von je `fraction` der Werte unten und oben."""
+    v = sorted(values)
+    k = int(len(v) * fraction)
+    return statistics.mean(v[k:len(v) - k])
+
+
 def aggregate(stations: list[dict], locator: CantonLocator) -> tuple[dict, dict]:
     """
-    Gibt ({kanton: median_preis}, {kanton: anzahl_stationen}) zurück.
+    Gibt ({kanton: getrimmter_mittelwert}, {kanton: anzahl_stationen}) zurück.
     Cluster, Stationen ohne Preis, ausserhalb der Schweiz oder mit Ausreisserpreis zählen nicht.
     """
     usable = [
@@ -90,7 +101,7 @@ def aggregate(stations: list[dict], locator: CantonLocator) -> tuple[dict, dict]
         if kz:
             by_canton[kz].append(round(s["price"], 3))
 
-    prices = {kz: round(statistics.median(v), 3) for kz, v in by_canton.items()
+    prices = {kz: round(trimmed_mean(v), 3) for kz, v in by_canton.items()
               if len(v) >= MIN_STATIONS_PER_CANTON}
     counts = {kz: len(v) for kz, v in by_canton.items() if kz in prices}
     return prices, counts

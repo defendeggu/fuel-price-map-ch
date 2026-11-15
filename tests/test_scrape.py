@@ -47,11 +47,18 @@ class Aggregation(unittest.TestCase):
     ZH = (47.3769, 8.5417)
     GE = (46.2044, 6.1432)
 
-    def test_median_statt_mittelwert(self):
-        stations = [st(p, *self.ZH) for p in (2.0, 2.1, 2.2, 2.3, 2.4)] + [st(2.9, *self.ZH)]
-        prices, counts = scrape.aggregate(stations, LOCATOR)
-        self.assertEqual(prices["ZH"], 2.25)
-        self.assertEqual(counts["ZH"], 6)
+    def test_getrimmter_mittelwert_ignoriert_extreme(self):
+        # 10 Stationen: je die günstigste (1.5) und teuerste (2.9) fallen weg
+        preise = (1.5, 2.2, 2.2, 2.3, 2.3, 2.3, 2.3, 2.4, 2.4, 2.9)
+        prices, counts = scrape.aggregate([st(p, *self.ZH) for p in preise], LOCATOR)
+        self.assertEqual(prices["ZH"], 2.3)
+        self.assertEqual(counts["ZH"], 10)
+
+    def test_kein_kleben_am_haeufigsten_preis(self):
+        # Median wäre exakt 2.32 – der Kantonswert soll die teureren Stationen abbilden
+        preise = [2.32] * 6 + [2.38, 2.39, 2.40, 2.41]
+        prices, _ = scrape.aggregate([st(p, *self.ZH) for p in preise], LOCATOR)
+        self.assertGreater(prices["ZH"], 2.33)
 
     def test_ausreisser_relativ_zum_median(self):
         stations = [st(2.3, *self.ZH) for _ in range(5)] + [st(4.5, *self.ZH), st(0.5, *self.ZH)]

@@ -49,7 +49,7 @@ Täglich um **01:00 Uhr CET** läuft ein GitHub Actions Workflow:
 1. Unit-Tests (`tests/test_scrape.py`) laufen zuerst
 2. `scripts/scrape.py` ruft alle Stationen (Diesel, Benzin 95) von der öffentlichen TCS-Cloud-Function ab (Zoom 18, damit keine Cluster entstehen, rund 3900 Stationen)
 3. Jede Station wird per **Koordinate** dem Kanton zugeordnet (Point-in-Polygon gegen `data/cantons.topo.json`); Ausland (FL, Euro-Airport) fällt weg, Samnaun (zollfrei) wird ausgeschlossen
-4. Ausreisserpreise (±40 % vom Landesmedian) werden verworfen; Kantonswert = **Median** der Stationspreise, mit Stationszahl
+4. Ausreisserpreise (±40 % vom Landesmedian) werden verworfen; Kantonswert = **getrimmter Mittelwert** (günstigste/teuerste 10 % weggelassen) der Stationspreise, mit Stationszahl. Kein Median, weil viele Stationen denselben Listenpreis haben und der Median dann fast überall identisch wäre
 5. Plausibilitätsprüfung: alle 26 Kantone belegt, genug Stationen, kein Sprung > 15 % zum letzten Stand. Sonst endet der Lauf mit Fehler (Workflow rot, Mail von GitHub) und es wird **nichts** committet. Es gibt keine geschätzten oder erfundenen Werte
 6. `data/canton-prices.json` (aktueller Stand) und `data/price-history.json` (Tagesverlauf, max. 400 Tage) werden committet
 
@@ -72,7 +72,7 @@ tests/app.spec.js              ← E2E-Tests der Karte (Playwright)
 
 | Quelle | Verwendung |
 |---|---|
-| [benzin.tcs.ch](https://benzin.tcs.ch) | CH-Stationspreise (~3900 Stationen, Median pro Kanton) |
+| [benzin.tcs.ch](https://benzin.tcs.ch) | CH-Stationspreise (~3900 Stationen, getrimmter Mittelwert pro Kanton) |
 | [swisstopo](https://swisstopo.admin.ch) | Kantonsgrenzen (TopoJSON) |
 | [OpenStreetMap](https://www.openstreetmap.org/) | Hintergrundkarte |
 
