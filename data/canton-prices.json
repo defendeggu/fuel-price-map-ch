@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-15T13:23:23Z",
+  "updated": "2026-11-16T03:55:36Z",
   "national": {
     "diesel": 2.321,
     "benzin": 1.951
@@ -9,7 +9,7 @@
   "cantons": {
     "ZH": {
       "diesel": 2.321,
-      "benzin": 1.952,
+      "benzin": 1.95,
       "n_diesel": 454,
       "n_benzin": 452,
       "min_diesel": 2,
@@ -23,13 +23,13 @@
       "n_diesel": 530,
       "n_benzin": 534,
       "min_diesel": 1.64,
-      "max_diesel": 2.54,
+      "max_diesel": 2.51,
       "min_benzin": 1.62,
-      "max_benzin": 2.21
+      "max_benzin": 2.18
     },
     "LU": {
-      "diesel": 2.334,
-      "benzin": 1.969,
+      "diesel": 2.331,
+      "benzin": 1.963,
       "n_diesel": 206,
       "n_benzin": 204,
       "min_diesel": 1.73,
@@ -38,34 +38,34 @@
       "max_benzin": 2.56
     },
     "UR": {
-      "diesel": 2.377,
-      "benzin": 2.022,
+      "diesel": 2.375,
+      "benzin": 2.016,
       "n_diesel": 21,
       "n_benzin": 20,
       "min_diesel": 2.19,
       "max_diesel": 2.68,
       "min_benzin": 1.82,
-      "max_benzin": 2.33
+      "max_benzin": 2.34
     },
     "SZ": {
-      "diesel": 2.316,
-      "benzin": 1.948,
+      "diesel": 2.315,
+      "benzin": 1.946,
       "n_diesel": 78,
       "n_benzin": 80,
       "min_diesel": 1.88,
-      "max_diesel": 2.5,
+      "max_diesel": 2.69,
       "min_benzin": 1.84,
       "max_benzin": 2.34
     },
     "OW": {
       "diesel": 2.319,
-      "benzin": 1.948,
+      "benzin": 1.952,
       "n_diesel": 19,
       "n_benzin": 19,
       "min_diesel": 2.29,
       "max_diesel": 2.41,
       "min_benzin": 1.92,
-      "max_benzin": 2.11
+      "max_benzin": 2.12
     },
     "NW": {
       "diesel": 2.334,
@@ -88,7 +88,7 @@
       "max_benzin": 2.17
     },
     "ZG": {
-      "diesel": 2.312,
+      "diesel": 2.313,
       "benzin": 1.937,
       "n_diesel": 38,
       "n_benzin": 38,
@@ -99,7 +99,7 @@
     },
     "FR": {
       "diesel": 2.315,
-      "benzin": 1.936,
+      "benzin": 1.935,
       "n_diesel": 196,
       "n_benzin": 196,
       "min_diesel": 1.95,
@@ -109,7 +109,7 @@
     },
     "SO": {
       "diesel": 2.312,
-      "benzin": 1.935,
+      "benzin": 1.934,
       "n_diesel": 134,
       "n_benzin": 134,
       "min_diesel": 1.79,
@@ -118,8 +118,8 @@
       "max_benzin": 2.13
     },
     "BS": {
-      "diesel": 2.324,
-      "benzin": 1.959,
+      "diesel": 2.325,
+      "benzin": 1.958,
       "n_diesel": 38,
       "n_benzin": 38,
       "min_diesel": 2.24,
@@ -129,7 +129,7 @@
     },
     "BL": {
       "diesel": 2.296,
-      "benzin": 1.932,
+      "benzin": 1.927,
       "n_diesel": 104,
       "n_benzin": 104,
       "min_diesel": 1.9,
@@ -138,8 +138,8 @@
       "max_benzin": 2.3
     },
     "SH": {
-      "diesel": 2.362,
-      "benzin": 2.002,
+      "diesel": 2.36,
+      "benzin": 1.997,
       "n_diesel": 49,
       "n_benzin": 50,
       "min_diesel": 2.28,
@@ -149,7 +149,7 @@
     },
     "AR": {
       "diesel": 2.338,
-      "benzin": 1.981,
+      "benzin": 1.978,
       "n_diesel": 21,
       "n_benzin": 20,
       "min_diesel": 2.29,
@@ -158,8 +158,8 @@
       "max_benzin": 2.1
     },
     "AI": {
-      "diesel": 2.329,
-      "benzin": 1.971,
+      "diesel": 2.324,
+      "benzin": 1.96,
       "n_diesel": 11,
       "n_benzin": 11,
       "min_diesel": 2.29,
@@ -179,7 +179,7 @@
     },
     "GR": {
       "diesel": 2.321,
-      "benzin": 2.002,
+      "benzin": 2.003,
       "n_diesel": 150,
       "n_benzin": 150,
       "min_diesel": 1.7,
@@ -188,7 +188,7 @@
       "max_benzin": 2.49
     },
     "AG": {
-      "diesel": 2.314,
+      "diesel": 2.313,
       "benzin": 1.94,
       "n_diesel": 332,
       "n_benzin": 332,
@@ -208,7 +208,7 @@
       "max_benzin": 2.36
     },
     "TI": {
-      "diesel": 2.224,
+      "diesel": 2.223,
       "benzin": 1.883,
       "n_diesel": 231,
       "n_benzin": 232,
@@ -218,7 +218,7 @@
       "max_benzin": 2.57
     },
     "VD": {
-      "diesel": 2.327,
+      "diesel": 2.326,
       "benzin": 1.948,
       "n_diesel": 317,
       "n_benzin": 318,
@@ -228,8 +228,8 @@
       "max_benzin": 2.32
     },
     "VS": {
-      "diesel": 2.324,
-      "benzin": 1.962,
+      "diesel": 2.323,
+      "benzin": 1.959,
       "n_diesel": 229,
       "n_benzin": 229,
       "min_diesel": 1.73,
@@ -238,7 +238,7 @@
       "max_benzin": 2.47
     },
     "NE": {
-      "diesel": 2.289,
+      "diesel": 2.29,
       "benzin": 1.923,
       "n_diesel": 72,
       "n_benzin": 72,
@@ -248,8 +248,8 @@
       "max_benzin": 2.08
     },
     "GE": {
-      "diesel": 2.333,
-      "benzin": 1.959,
+      "diesel": 2.33,
+      "benzin": 1.957,
       "n_diesel": 89,
       "n_benzin": 89,
       "min_diesel": 2.24,
@@ -258,8 +258,8 @@
       "max_benzin": 2.24
     },
     "JU": {
-      "diesel": 2.316,
-      "benzin": 1.888,
+      "diesel": 2.314,
+      "benzin": 1.889,
       "n_diesel": 61,
       "n_benzin": 61,
       "min_diesel": 1.99,
